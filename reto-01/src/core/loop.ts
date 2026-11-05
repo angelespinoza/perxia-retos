@@ -116,10 +116,41 @@ export async function ejecutarTurno(p: ParametrosTurno): Promise<RespuestaTurno>
 
     if (pendiente) {
       sesion.pendiente = pendiente
-      return terminar(preguntaConfirmacion(r.texto, pendiente), { needsConfirmation: true, pendiente })
+      // Si el modelo pidió confirmación sin escribir el resumen, se le pide redactarlo (sin ejecutar más herramientas).
+      const texto = r.texto.trim().length >= 80 ? r.texto : await redactarCierre(p, r.texto)
+      return terminar(preguntaConfirmacion(texto, pendiente), { needsConfirmation: true, pendiente })
     }
   }
   return terminar(cierreParcial(llamadas, `el tope de ${config.maxIteraciones} pasos`))
+}
+
+const INSTRUCCION_CIERRE =
+  "La confirmación quedó registrada. Ahora escribe al usuario el resumen de lo hecho según tus instrucciones y termina con la pregunta de confirmación. No llames herramientas."
+
+/** Una llamada más para obtener el texto del cierre; las herramientas que pida se registran como no ejecutadas. */
+async function redactarCierre(p: ParametrosTurno, textoPrevio: string): Promise<string> {
+  if (!p.adapter) return textoPrevio
+  const { sesion } = p
+  sesion.mensajes.push({ rol: "usuario", texto: INSTRUCCION_CIERRE })
+  try {
+    const r = await p.adapter.enviar(sesion.mensajes, p.registro.specs(), { system: p.system, timeoutMs: p.config.timeoutMs })
+    sesion.uso.entrada += r.uso.entrada
+    sesion.uso.salida += r.uso.salida
+    sesion.mensajes.push({ rol: "asistente", texto: r.texto, llamadas: r.llamadas, nativo: r.nativo })
+    if (r.llamadas.length > 0)
+      sesion.mensajes.push({
+        rol: "herramienta",
+        resultados: r.llamadas.map((l) => ({
+          id: l.id,
+          nombre: l.nombre,
+          contenido: JSON.stringify({ ok: false, error: "no ejecutada: el turno espera la confirmación del usuario" }),
+          esError: true,
+        })),
+      })
+    return r.texto || textoPrevio
+  } catch {
+    return textoPrevio
+  }
 }
 
 function pendienteDe(args: Record<string, unknown>): ConfirmacionTurno {

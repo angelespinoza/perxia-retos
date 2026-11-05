@@ -56,10 +56,9 @@ describe("confirmación humana (CA3 / RN4)", () => {
       respuesta([llamada("1", "proveedor_leer_solicitud", { caso })]),
       respuesta([llamada("2", "proveedor_mapear_campos", { caso, campos: [] })]),
       respuesta([llamada("3", "proveedor_generar_formulario", { caso }), llamada("4", "proveedor_armar_paquete", { caso })]),
-      respuesta(
-        [llamada("5", "agente_solicitar_confirmacion", { accion: "simular_envio", referencia: caso, resumen: "Se enviaría el paquete." })],
-        "Resumen del caso.",
-      ),
+      respuesta([llamada("5", "agente_solicitar_confirmacion", { accion: "simular_envio", referencia: caso, resumen: "Se enviaría el paquete." })]),
+      // Pidió confirmación sin resumen: el ciclo hace una llamada más solo para redactarlo.
+      respuesta([], "Resumen: 13 campos llenos, 1 faltante y 1 por confirmar. Falta un soporte. ¿Confirmas el envío simulado?"),
       respuesta([llamada("6", "proveedor_simular_envio", { caso, confirmado: true })]),
       respuesta([], "Listo: quedó ENVIO-SIMULADO.md."),
     ])
@@ -67,6 +66,7 @@ describe("confirmación humana (CA3 / RN4)", () => {
 
     const t1 = await ejecutarTurno({ ...base, mensaje: `Procesa el caso "${caso}". No envíes nada todavía.` })
     expect(t1.needsConfirmation).toBe(true)
+    expect(t1.reply).toContain("13 campos llenos")
     expect(t1.reply).toContain("?")
     expect(t1.toolCalls.map((t) => t.herramienta)).toContain("proveedor_armar_paquete")
     expect(await storage.leer(`${caso}/ENVIO-SIMULADO.md`)).toBeNull()
