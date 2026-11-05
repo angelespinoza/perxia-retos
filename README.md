@@ -6,7 +6,7 @@ Tres agentes conversacionales independientes, uno por reto, en carpetas autocont
 | --- | --- | --- | --- | --- |
 | 1 | Registro como Proveedor | [reto-01](reto-01/) | Desplegado | https://perxia-reto-01-one.vercel.app |
 | 2 | Registro de Contratos Vigentes | [reto-02](reto-02/) | Por iniciar | — |
-| 3 | Órdenes de Compra SAP | [reto-03](reto-03/) | Por iniciar | — |
+| 3 | Órdenes de Compra SAP | [reto-03](reto-03/) | Desplegado | LINK_PENDIENTE |
 
 Cada reto tiene su `README.md` (cómo levantarlo) y su `SOLUCION.md` (planteamiento).
 
