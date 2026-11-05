@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        reto: [reto-01, reto-03]
+        reto: [reto-01, reto-02, reto-03]
     defaults:
       run:
         working-directory: ${{ matrix.reto }}
