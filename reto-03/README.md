@@ -2,7 +2,7 @@
 
 Agente conversacional que lee el paquete de compra (correo, solicitud, cotización, aprobación y factura), lo valida contra los maestros con las reglas RC1–RC10, construye la OC con trazabilidad por campo, genera la evidencia de aprobación y crea la OC en un SAP simulado e idempotente. Las excepciones se confirman con la analista; los bloqueos se devuelven con la acción sugerida.
 
-- **Link de prueba:** LINK_PENDIENTE (sin clave de acceso)
+- **Link de prueba:** https://perxia-reto-03-xi.vercel.app (sin clave de acceso)
 - **Planteamiento de la solución:** [SOLUCION.md](SOLUCION.md)
 
 ## Requisitos

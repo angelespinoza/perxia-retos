@@ -138,7 +138,7 @@ Cambio de proceso que propondría: **OC abiertas (contratos marco o pedidos abie
 | HU-4 Evidencia | Hecho (P0 txt, P1 pdf) | `aprobacion.txt` y `aprobacion.pdf` con sha256 | Exportar el `.eml` original; firma digital si auditoría la exige. |
 | HU-5 Crear OC | Hecho | Numeración desde 4500000001, idempotencia, puerta de confirmación, `control.csv` | Adaptador OData real (sección 6). |
 | HU-6 Errores | Hecho | Caso inexistente, pasos fuera de orden, JSON malformado, monto no numérico, adjuntos ausentes en `demo.ts` | Alertas operativas ante errores repetidos. |
-| Despliegue (link) | Hecho | LINK_PENDIENTE con OpenAI `gpt-5.5` y Vercel Blob privado | Dominio propio y monitoreo. |
+| Despliegue (link) | Hecho | https://perxia-reto-03-xi.vercel.app con OpenAI `gpt-5.5` y Vercel Blob privado; prompt de la sección 11 probado en producción | Dominio propio y monitoreo. |
 | Bonus `modulo/` | Hecho | Generado desde las mismas fuentes; `bun run build:modulo --check` en CI | — |
 
 ## 11. Uso de IA
