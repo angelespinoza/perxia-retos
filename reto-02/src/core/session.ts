@@ -16,6 +16,8 @@ export interface EventoChat {
 
 export interface Sesion {
   id: string
+  /** Usuario que ingresó por /login; la sesión y su espacio out/<id>/ son solo suyos. */
+  usuario?: string
   creada: string
   mensajes: Mensaje[]
   eventos: EventoChat[]
@@ -29,16 +31,19 @@ export function idValido(id: string): boolean {
   return ID_VALIDO.test(id)
 }
 
-export function nuevaSesion(id: string): Sesion {
-  return { id, creada: new Date().toISOString(), mensajes: [], eventos: [], pendiente: null, uso: { entrada: 0, salida: 0 } }
+export function nuevaSesion(id: string, usuario?: string): Sesion {
+  return { id, ...(usuario ? { usuario } : {}), creada: new Date().toISOString(), mensajes: [], eventos: [], pendiente: null, uso: { entrada: 0, salida: 0 } }
 }
 
-export async function cargarSesion(storage: Storage, id: string): Promise<Sesion | null> {
+/** Con `usuario`, una sesión de otro usuario se trata como inexistente. */
+export async function cargarSesion(storage: Storage, id: string, usuario?: string): Promise<Sesion | null> {
   if (!idValido(id)) return null
   const texto = await storage.leerTexto(`sessions/${id}.json`)
   if (!texto) return null
   try {
-    return JSON.parse(texto) as Sesion
+    const sesion = JSON.parse(texto) as Sesion
+    if (usuario !== undefined && sesion.usuario !== usuario) return null
+    return sesion
   } catch {
     return null
   }

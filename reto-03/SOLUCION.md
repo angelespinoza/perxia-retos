@@ -31,11 +31,11 @@ El núcleo (`src/core/`, `src/llm/`, `src/server.ts`, `web/`) es el mismo del Re
 
 ## 3. Ciclo del agente
 
-1. `POST /api/chat` carga la sesión desde el `Storage` (`sessions/<id>.json`), porque en Vercel cada request puede caer en otra instancia.
-2. Si la sesión tenía una confirmación pendiente y el mensaje es afirmativo («confirmo», «sí», «créala»), esa confirmación vale **solo para este turno**. Cualquier otro mensaje la descarta.
+1. `POST /api/chat` exige sesión iniciada por `/login` y carga la sesión del usuario desde el `Storage` (`sessions/<id>.json`); las herramientas trabajan en el espacio `out/<sessionId>/` de esa sesión,, porque en Vercel cada request puede caer en otra instancia.
+2. Si la sesión tenía una confirmación pendiente y el mensaje responde «sí» o «confirmo» (o es el botón Confirmar), esa confirmación vale **solo para este turno** y solo para la acción y la referencia que se preguntaron. Los verbos de orden («envía», «registra», «crea») son pedidos, no confirmaciones; cualquier otro mensaje descarta la pendiente.
 3. El ciclo llama al modelo con el historial y las herramientas. El registro valida los argumentos con zod (un error vuelve al modelo como resultado), ejecuta la herramienta dentro de `safe()` (nunca lanza) y registra la llamada en `out/log.jsonl` y `out/<caso>/log.jsonl` (CA4).
 4. **Orden obligatorio** leer → validar → generar_evidencia → construir_payload → crear, porque el payload lleva el sha256 de la evidencia. Cada herramienta revisa el estado del caso (`out/<caso>/estado.json`) y, si se la llama antes de tiempo, responde qué paso falta.
-5. **Confirmación humana (CA3):** con confirmaciones pendientes, `oc_crear` sin `confirmado: true` no crea (deja una fila `pendiente` en el control). El modelo pide confirmación con la pseudo-herramienta `agente_solicitar_confirmacion`; el ciclo termina el turno con `needsConfirmation: true` y el front muestra un banner con Confirmar / Cancelar. Un `confirmado: true` sin un «sí» de la analista para ese caso en el turno anterior se rechaza en el registro, aunque el modelo se equivoque.
+5. **Confirmación humana (CA3):** con confirmaciones pendientes, `oc_crear` sin `confirmado: true` no crea (deja una fila `pendiente` en el control). El modelo pide confirmación con la pseudo-herramienta `agente_solicitar_confirmacion`; la política del reto valida la acción contra el estado real y el código arma la pregunta y la advertencia (no el modelo); el ciclo termina el turno con `needsConfirmation: true` y el front muestra un banner con Confirmar / Cancelar. Un `confirmado: true` sin un «sí» de la analista para ese caso en el turno anterior se rechaza en el registro, aunque el modelo se equivoque.
 6. **Topes (CA1):** `MAX_ITERACIONES` (25) por turno, `MAX_TOKENS_SESION` por sesión, `LLM_TIMEOUT_MS` por llamada y 270 s por turno (la función de Vercel tiene 300 s). Al llegar a un tope, el agente responde con lo hecho y lo que falta.
 7. **Errores (CA5):** un error del proveedor del modelo se traduce a un mensaje claro en el chat; la sesión sigue viva.
 
@@ -110,6 +110,9 @@ Cambio de proceso que propondría: **OC abiertas (contratos marco o pedidos abie
 
 | Decisión | Alternativa descartada | Por qué |
 | --- | --- | --- |
+| La pregunta de confirmación la arma el código desde la acción pendiente (con advertencia si no está lista) y solo «sí»/«confirmo» o el botón la aceptan | Dejar que el modelo redacte la pregunta y aceptar verbos como «envía», «registra» o «crea» | Revisión del reto-01: una orden es un pedido, no una confirmación, y la advertencia de un paquete u OC incompleto no puede depender del texto del modelo. |
+| Estado por sesión en la web: cada sesión trabaja en `out/<sessionId>/`, que parte de cero y pertenece al usuario que ingresó; `demo.ts` sigue escribiendo en `out/` | Un único `out/` compartido en Blob | Revisión: en producción todas las sesiones compartían el estado, así que la demo de la sección 11 no se podía reproducir. |
+| Ingreso propio con usuario y contraseña (`/login`), cookie `HttpOnly`/`Secure`/`SameSite=Lax` firmada con HMAC y vencimiento de 8 h | `ACCESS_KEY` en una cabecera o en la URL; Vercel Deployment Protection | Una pantalla de ingreso es lo esperable para un evaluador, la clave no viaja en la URL y las sesiones quedan asociadas a un usuario. |
 | Reglas RC1–RC10 como funciones puras y deterministas | Pedirle al modelo que evalúe las reglas | Un modelo podría «arreglar» un monto o aceptar un aprobador parecido (riesgo del PRD). Las funciones son testeables una a una y la demo corre sin clave. |
 | `oc_validar`, `oc_construir_payload` y `oc_crear` releen todo desde los fixtures; el paquete y los derivados que envía el modelo se ignoran | Confiar en los argumentos del modelo | CA2 por diseño: el modelo no puede alterar un valor entre validar y crear. |
 | `oc_crear` exige que el payload (si se envía) tenga el mismo hash canónico que el guardado | Crear con lo que mande el modelo | Si el modelo cambia un campo, la OC no se crea. El hash es sobre JSON con claves ordenadas, para que reordenar claves no lo rompa. |
@@ -126,7 +129,8 @@ Cambio de proceso que propondría: **OC abiertas (contratos marco o pedidos abie
 - Un código de IVA o de condición de pago informado que no existe en el maestro se trata como bloqueo, aunque el PRD solo describe el caso ausente.
 - La unidad se deriva de la descripción («horas» → H, «mensual» → MES, resto → UN). «Vigencia 12 meses» (sol-001) se deja en UN porque se compran licencias, no meses.
 - Cada intento de `oc_crear` agrega una fila al control, incluidos los `pendiente` (falta confirmación) y los `idempotente`.
-- La confirmación se reconoce por palabras clave en español; un mensaje ambiguo no cuenta.
+- Solo «sí» o «confirmo» en respuesta a la pregunta (o el botón Confirmar) confirman; «créala» u otra orden no, y un mensaje ambiguo tampoco cuenta.
+- En la web cada sesión parte sin OC previas (su propio `out/<sessionId>/`, con su SAP simulado y su `control.csv`), así la idempotencia de una sesión no afecta a otra y la demo siempre crea la OC 4500000001. `demo.ts` sigue usando `out/`.
 
 ## 10. Cobertura
 
@@ -150,10 +154,12 @@ Cambio de proceso que propondría: **OC abiertas (contratos marco o pedidos abie
 
 | Riesgo | Mitigación |
 | --- | --- |
+| Acceso al link público | Ingreso con usuario y contraseña en variables sensibles de Vercel, comparación en tiempo constante, cookie firmada de 8 h y bloqueo de 15 min tras 5 intentos fallidos por IP. El bloqueo vive en la memoria de cada instancia: en producción iría a un almacén compartido (o a un proveedor de identidad con MFA) y habría un usuario por persona. |
+| Espacios de sesión que se acumulan en Blob | Cada sesión ocupa `out/<sessionId>/`; en producción, una limpieza programada de sesiones viejas. |
 | El modelo «arregla» un monto para que cuadre con la cotización | Los montos salen de la solicitud en la herramienta; el payload enviado se compara por hash y se rechaza si cambia. |
 | Aprobaciones en texto libre ambiguas («aprobado pero revisar el valor») | RC2 solo acepta «aprobado» sin negación; en producción, aprobación en un flujo con botón o firma y no en texto libre. |
 | La conexión a SAP no es viable a corto plazo | Plan B de la sección 6: OC lista para ME21N y archivo de carga masiva. |
 | Doble creación por reintentos o concurrencia | Idempotencia por referencia externa en SAP, búsqueda antes de reintentar y bloqueo por `solicitud_id` en el backend. |
 | Concurrencia en Vercel Blob: añadir una línea es leer y reescribir el archivo | Aceptable para una analista; en producción, control y órdenes en una base de datos con escritura atómica. |
 | Maestros desactualizados (aprobador que cambió de rol, tope nuevo) | Consultar SAP o RR. HH. en tiempo real; dueño del dato por maestro. |
-| Gasto descontrolado de la clave del modelo | Topes de iteraciones, tokens por sesión y tiempo por turno; `ACCESS_KEY` para el link público. |
+| Gasto descontrolado de la clave del modelo | Topes de iteraciones, tokens por sesión y tiempo por turno; el link exige ingreso con usuario y contraseña. |

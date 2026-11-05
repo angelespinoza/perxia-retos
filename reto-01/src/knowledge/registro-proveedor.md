@@ -31,7 +31,7 @@ Periferia recibe entre 8 y 12 solicitudes al mes de clientes en Colombia, Ecuado
 | RN4 | Ninguna acción externa (envío, firma, carga a portal) sin confirmación explícita de la analista en el mensaje inmediatamente anterior. |
 | RN5 | Toda ejecución deja registro en `out/<caso>/log.jsonl`. |
 
-Un soporte está vencido cuando su `vigencia_hasta` es anterior a la fecha de referencia del sistema. Un soporte sin `vigencia_hasta` (por ejemplo el RUT) no vence.
+Un soporte está vencido cuando su `vigencia_hasta` es anterior a la fecha de referencia del sistema, que por defecto es la fecha de ejecución (hoy). Un soporte sin `vigencia_hasta` (por ejemplo el RUT) no vence.
 
 ## Soportes del repositorio
 
@@ -56,4 +56,4 @@ Si el cliente exige un soporte que no está en el repositorio (por ejemplo `cert
 
 ## Paquete para firma
 
-`out/<caso>/paquete/` contiene el formulario, copias de los soportes, `checklist.md` y `borrador-correo.md`. Después de la firma, «enviar» en este sistema solo escribe `out/<caso>/ENVIO-SIMULADO.md`.
+`out/<caso>/paquete/` contiene el formulario, copias de los soportes vigentes, `checklist.md` y `borrador-correo.md`. El borrador solo adjunta soportes vigentes; si el paquete no está listo para firma, va encabezado con «BORRADOR — no enviar» y la lista de pendientes, y no dice «firmado». Rearmar el paquete lo regenera desde cero y borra cualquier `ENVIO-SIMULADO.md` anterior. Después de la firma, «enviar» en este sistema solo escribe `out/<caso>/ENVIO-SIMULADO.md`, y solo tras un «sí» o «confirmo» a la pregunta de confirmación.

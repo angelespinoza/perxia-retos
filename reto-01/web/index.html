@@ -14,7 +14,11 @@
     </div>
     <div class="acciones">
       <span id="modelo" class="insignia">…</span>
+      <span id="usuario" class="insignia" hidden></span>
       <button id="nueva" class="secundario" type="button">Nueva sesión</button>
+      <form class="salir" method="post" action="/logout">
+        <button class="secundario" type="submit">Cerrar sesión</button>
+      </form>
     </div>
   </header>
 
@@ -37,6 +41,7 @@
         <div>
           <strong>El agente pide confirmación</strong>
           <p id="confirmacion-texto"></p>
+          <p id="confirmacion-advertencia" class="advertencia" hidden></p>
         </div>
         <div class="botones">
           <button id="confirmar" type="button">Confirmar</button>

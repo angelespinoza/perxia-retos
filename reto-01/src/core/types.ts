@@ -8,6 +8,10 @@ export interface ConfirmacionTurno {
   accion: string
   referencia: string
   resumen: string
+  /** Pregunta armada por el código a partir del estado real de la acción. */
+  pregunta?: string
+  /** Advertencia fuerte cuando el paquete u OC no está listo. */
+  advertencia?: string
 }
 
 export interface ToolCtx {
@@ -20,12 +24,16 @@ export interface ToolCtx {
   storage: Storage
   /** Confirmación del usuario vigente en este turno, si la hay. */
   confirmacion: ConfirmacionTurno | null
+  /** Mensaje del usuario en este turno (para saber si pidió una acción). */
+  mensajeUsuario?: string
 }
 
 export interface Tool<S extends z.ZodRawShape> {
   description: string
   args: S
   efecto?: Efecto
+  /** Acción de confirmación que autoriza `confirmado: true` en esta herramienta, por ejemplo 'simular_envio'. */
+  confirma?: string
   execute(args: z.output<z.ZodObject<S>>, ctx: ToolCtx): Promise<string>
 }
 

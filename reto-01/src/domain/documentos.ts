@@ -164,19 +164,37 @@ export function generarChecklist(
   ].join("\n")
 }
 
-/** RN2: el borrador nunca incluye datos bancarios ni valores del formulario. */
-export function generarBorradorCorreo(solicitud: Solicitud, soportes: SoporteEvaluado[], nombreFormulario: string): string {
-  const adjuntos = soportes.filter((s) => s.estado !== "ausente").map((s) => `- ${s.descripcion ?? s.tipo}`)
+/** RN2: el borrador nunca incluye datos bancarios ni valores del formulario.
+ * Solo adjunta soportes vigentes; si el paquete no está listo, se encabeza con «BORRADOR — no enviar»
+ * y la lista de pendientes, y no dice «firmado». */
+export function generarBorradorCorreo(
+  solicitud: Solicitud,
+  soportes: SoporteEvaluado[],
+  nombreFormulario: string,
+  estado: { listo: boolean; pendientes: string[] } = { listo: true, pendientes: [] },
+): string {
+  const adjuntos = soportes.filter((s) => s.estado === "presente").map((s) => `- ${s.descripcion ?? s.tipo}`)
+  const encabezado = estado.listo
+    ? []
+    : [
+        "> **BORRADOR — no enviar.** El paquete no está listo para firma. Pendientes:",
+        ...estado.pendientes.map((p) => `> - ${p}`),
+        "",
+      ]
+  const formulario = estado.listo
+    ? `el formulario de registro como proveedor (${nombreFormulario}) firmado por nuestro representante legal`
+    : `el formulario de registro como proveedor (${nombreFormulario}), pendiente de firma del representante legal`
   return [
+    ...encabezado,
     `Para: ${solicitud.de}`,
     `Asunto: RE: ${solicitud.asunto}`,
     "",
     "Buen día,",
     "",
-    `En respuesta a su solicitud del ${solicitud.fecha}, adjuntamos el formulario de registro como proveedor (${nombreFormulario}) firmado por nuestro representante legal, junto con los siguientes soportes:`,
+    `En respuesta a su solicitud del ${solicitud.fecha}, adjuntamos ${formulario}${adjuntos.length > 0 ? ", junto con los siguientes soportes:" : "."}`,
     "",
     ...adjuntos,
-    "",
+    ...(adjuntos.length > 0 ? [""] : []),
     "Quedamos atentos a cualquier información adicional.",
     "",
     "Cordialmente,",

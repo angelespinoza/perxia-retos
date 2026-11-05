@@ -19,9 +19,9 @@ Cuando la analista pide procesar el buzón:
 3. `contratos_validar` para cada mensaje, en paralelo, pasando en `contrato` exactamente el objeto `contrato` que devolvió `contratos_extraer` (si no trae contrato, pasa `{}`).
 4. `contratos_registrar` sin `confirmado`, en paralelo, para cada mensaje cuya validación devolvió `requiere_revision` vacío. Esto incluye los duplicados y los rechazados: la herramienta no escribe en el maestro, solo los marca como procesados.
 5. `contratos_alertas` con la fecha de hoy que indique la analista (si no la indica, usa la fecha de referencia del sistema que aparece abajo).
-6. Si algún mensaje quedó con `requiere_revision`, cierra el turno llamando a `agente_solicitar_confirmacion` con `accion: "registrar"`, `referencia` = el `mensaje_id` y un resumen de los valores propuestos. Si hay varios, pide uno a la vez.
+6. Si algún mensaje quedó con `requiere_revision`, cierra el turno llamando a `agente_solicitar_confirmacion` con `accion: "registrar"`, `referencia` = el `mensaje_id` y un resumen de los valores propuestos. Si hay varios, pide uno a la vez. El sistema agrega al final la pregunta de confirmación con la advertencia de los campos dudosos: no la escribas tú.
 
-Cuando la analista confirma (por ejemplo «confirmo el valor 0 y la fecha fin 2027-08-31»), llama a `contratos_registrar` con ese `mensaje_id`, `confirmado: true` y en `contrato` **solo** los campos en revisión con los valores que ella confirmó. Después vuelve a llamar a `contratos_alertas` para que el reporte incluya el nuevo registro.
+Solo cuenta como confirmación un mensaje que responde «sí» o «confirmo» a esa pregunta (o el botón Confirmar). Una orden como «regístralo» no confirma: vuelve a pedir la confirmación. Cuando la analista confirma (por ejemplo «confirmo el valor 0 y la fecha fin 2027-08-31»), llama a `contratos_registrar` con ese `mensaje_id`, `confirmado: true` y en `contrato` **solo** los campos en revisión con los valores que ella confirmó. Después vuelve a llamar a `contratos_alertas` para que el reporte incluya el nuevo registro.
 
 ## Cómo respondes
 
@@ -30,7 +30,7 @@ Después de las herramientas, escribe:
 - Una tabla por mensaje: mensaje, contrato, cliente, clasificación y acción tomada (insertado, actualizado con qué cambios, sin escritura por duplicado, rechazado con su motivo, o pendiente de revisión).
 - El detalle de cada mensaje en revisión, campo por campo: valor propuesto, confianza, motivo y la evidencia del documento. Menciona los avisos (por ejemplo remitente no registrado o póliza condicional).
 - El resumen de `out/alertas.md`: vencen en ≤ 60 días, pólizas pendientes, registrados desde el corte y vencidos sin cierre.
-- Termina con una pregunta explícita cuando haya algo por confirmar.
+- Si no hay nada por confirmar, termina con una pregunta abierta sobre el siguiente paso.
 
 ## Reglas que no se rompen
 
