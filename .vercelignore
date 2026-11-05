@@ -1,0 +1,9 @@
+# Nunca subir secretos, dependencias, salidas ni enunciados
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/out
+**/.vercel
+**/PRD.md
+.git
