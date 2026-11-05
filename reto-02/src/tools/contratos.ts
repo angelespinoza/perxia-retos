@@ -8,31 +8,33 @@ import {
   aplicarCambios,
   type Cambios,
   clasificar,
-  type Fila,
   filaNueva,
   rutaArchivo,
-  siguienteAuto,
-  type Validacion,
 } from "../domain/clasificacion.ts"
-import { parsearCsv, serializarCsv, type Tabla } from "../domain/csv.ts"
-import { CAMPOS, type Campo, type Contrato, type Extraccion, extraerContrato, PAISES } from "../domain/extraccion.ts"
+import { serializarCsv } from "../domain/csv.ts"
+import { CAMPOS, type Campo, type Contrato, type Extraccion, PAISES } from "../domain/extraccion.ts"
 import {
-  type Adjunto,
   type Correo,
   documentoContrato,
   leerAdjuntos,
   leerComerciales,
   leerCorreo,
-  leerMaestroFixture,
   listarMensajes,
   motivoSinContrato,
 } from "../domain/fixtures.ts"
+import {
+  analizar,
+  asegurarMaestro,
+  leerMaestro,
+  leerProcesados,
+  marcarProcesado,
+  type Procesado,
+  RUTA_ALERTAS,
+  RUTA_HISTORIAL,
+  RUTA_MAESTRO,
+  textoRevision,
+} from "../domain/estado.ts"
 import { esFechaIso, MONEDAS } from "../domain/texto.ts"
-
-const RUTA_MAESTRO = "sharepoint/maestro-contratos.csv"
-const RUTA_HISTORIAL = "sharepoint/historial.jsonl"
-const RUTA_PROCESADOS = "procesados.json"
-const RUTA_ALERTAS = "alertas.md"
 
 // ---------- argumentos ----------
 
@@ -56,64 +58,6 @@ const ContratoArg = z
   .partial()
   .describe("Campos del contrato tal como los devolvió contratos_extraer; en los campos en revisión, el valor que confirmó el usuario")
 type ContratoEntrada = z.infer<typeof ContratoArg>
-
-// ---------- estado en out/ ----------
-
-interface Procesado {
-  clasificacion: string
-  accion: string
-  id_contrato: string
-  fecha: string
-  motivo?: string
-}
-
-async function leerProcesados(ctx: ToolCtx): Promise<Record<string, Procesado>> {
-  const texto = await ctx.storage.leerTexto(RUTA_PROCESADOS)
-  return texto ? (JSON.parse(texto) as Record<string, Procesado>) : {}
-}
-
-async function marcarProcesado(ctx: ToolCtx, id: string, p: Procesado): Promise<void> {
-  const actuales = await leerProcesados(ctx)
-  await ctx.storage.escribir(RUTA_PROCESADOS, JSON.stringify({ ...actuales, [id]: p }, null, 2))
-}
-
-/** Copia de trabajo del maestro; el fixture nunca se modifica (RN6). */
-async function leerMaestro(ctx: ToolCtx): Promise<Tabla> {
-  return parsearCsv((await ctx.storage.leerTexto(RUTA_MAESTRO)) ?? (await leerMaestroFixture(ctx.directory)))
-}
-
-/** La primera escritura copia el fixture a out/sharepoint/ (RN6). */
-async function asegurarMaestro(ctx: ToolCtx): Promise<Tabla> {
-  const copia = await ctx.storage.leerTexto(RUTA_MAESTRO)
-  if (copia) return parsearCsv(copia)
-  const original = await leerMaestroFixture(ctx.directory)
-  await ctx.storage.escribir(RUTA_MAESTRO, original)
-  return parsearCsv(original)
-}
-
-// ---------- análisis de un mensaje ----------
-
-interface Analisis {
-  correo: Correo
-  documento: Adjunto | null
-  extraccion: Extraccion | null
-  motivo?: string
-}
-
-async function analizar(ctx: ToolCtx, id: string, maestro: Fila[]): Promise<Analisis> {
-  const correo = await leerCorreo(ctx.directory, id)
-  const adjuntos = await leerAdjuntos(ctx.directory, correo)
-  const documento = documentoContrato(adjuntos)
-  if (!documento) return { correo, documento, extraccion: null, motivo: motivoSinContrato(adjuntos) }
-  const extraccion = extraerContrato(documento.texto)
-  if (!extraccion.contrato.id_contrato) {
-    const anio = (extraccion.contrato.fecha_inicio ?? correo.fecha).slice(0, 4)
-    extraccion.contrato.id_contrato = siguienteAuto(maestro, anio)
-    extraccion.confianza.id_contrato = 0.5
-    extraccion.avisos.push("el documento no trae número de contrato: se asigna un identificador AUTO")
-  }
-  return { correo, documento, extraccion }
-}
 
 async function resolverComercial(ctx: ToolCtx, correo: Correo): Promise<{ nombre: string; aviso?: string }> {
   const comercial = (await leerComerciales(ctx.directory)).find((c) => c.email.toLowerCase() === correo.de.toLowerCase())
@@ -143,10 +87,6 @@ function validarFechas(entrada: ContratoEntrada): string | null {
     if (valor && !esFechaIso(valor)) return `fecha inválida en ${campo}: ${valor}`
   }
   return null
-}
-
-function textoRevision(v: Validacion): string {
-  return v.requiere_revision.map((c) => `${c} (${v.motivos_revision[c] ?? "revisar"})`).join(", ")
 }
 
 // ---------- herramientas ----------
@@ -272,6 +212,7 @@ export const registrar = defineTool({
       .describe("true solo si el usuario confirmó explícitamente los campos en revisión en su último mensaje"),
   },
   efecto: "externa",
+  confirma: "registrar",
   async execute({ mensaje_id, contrato, confirmado }, ctx) {
     const errorFecha = validarFechas(contrato)
     if (errorFecha) return fail(errorFecha)

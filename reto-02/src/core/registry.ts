@@ -10,6 +10,7 @@ interface ToolGenerica {
   description: string
   args: z.ZodRawShape
   efecto?: Efecto
+  confirma?: string
   execute: (args: never, ctx: ToolCtx) => Promise<string>
 }
 
@@ -118,7 +119,7 @@ async function ejecutarValidado(
   if (!h) return fail(`herramienta desconocida: ${nombre}`)
   const validacion = h.schema.safeParse(args)
   if (!validacion.success) return fail(`argumentos inválidos: ${formatearIssues(validacion.error)}`)
-  const bloqueo = verificarConfirmacion(args, ctx)
+  const bloqueo = verificarConfirmacion(args, ctx, h.tool.confirma)
   if (bloqueo) return fail(bloqueo)
   const ejecutar = h.tool.execute as (a: unknown, c: ToolCtx) => Promise<string>
   return safe(() => ejecutar(validacion.data, ctx))

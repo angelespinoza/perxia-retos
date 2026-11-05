@@ -14,7 +14,11 @@
     </div>
     <div class="acciones">
       <span id="modelo" class="insignia">…</span>
+      <span id="usuario" class="insignia" hidden></span>
       <button id="nueva" class="secundario" type="button">Nueva sesión</button>
+      <form class="salir" method="post" action="/logout">
+        <button class="secundario" type="submit">Cerrar sesión</button>
+      </form>
     </div>
   </header>
 
@@ -39,6 +43,7 @@
         <div>
           <strong>El agente pide confirmación</strong>
           <p id="confirmacion-texto"></p>
+          <p id="confirmacion-advertencia" class="advertencia" hidden></p>
         </div>
         <div class="botones">
           <button id="confirmar" type="button">Confirmar</button>
@@ -58,9 +63,9 @@
       <ul id="archivos"></ul>
       <h2>Control y SAP</h2>
       <ul>
-        <li><a href="/out/control.csv" target="_blank" rel="noopener">control.csv</a></li>
-        <li><a href="/out/sap/ordenes.jsonl" target="_blank" rel="noopener">sap/ordenes.jsonl</a></li>
-        <li><a href="/out/log.jsonl" target="_blank" rel="noopener">log.jsonl</a></li>
+        <li><a href="#" data-out="out/control.csv" target="_blank" rel="noopener">control.csv</a></li>
+        <li><a href="#" data-out="out/sap/ordenes.jsonl" target="_blank" rel="noopener">sap/ordenes.jsonl</a></li>
+        <li><a href="#" data-out="out/log.jsonl" target="_blank" rel="noopener">log.jsonl</a></li>
       </ul>
     </aside>
   </main>

@@ -30,10 +30,10 @@ Un cambio de reglas de negocio toca `src/domain/` o `src/knowledge/`, nunca `src
 
 ## 3. Ciclo del agente
 
-1. `POST /api/chat` carga la sesión desde el `Storage` (`sessions/<id>.json`) para que funcione aunque cada request caiga en otra instancia de Vercel.
-2. Si la sesión tenía una confirmación pendiente y el mensaje del usuario es afirmativo («sí», «envía», «confirmo»…), esa confirmación queda válida **solo para este turno**. Cualquier otro mensaje la descarta.
+1. `POST /api/chat` exige sesión iniciada por `/login` y carga la sesión del usuario desde el `Storage` (`sessions/<id>.json`); las herramientas trabajan en el espacio `out/<sessionId>/` de esa sesión, para que funcione aunque cada request caiga en otra instancia de Vercel.
+2. Si la sesión tenía una confirmación pendiente y el mensaje responde «sí» o «confirmo» (o es el botón Confirmar), esa confirmación vale **solo para este turno** y solo para la acción y la referencia que se preguntaron. Los verbos de orden («envía», «registra», «crea») son pedidos, no confirmaciones; cualquier otro mensaje descarta la pendiente.
 3. El ciclo llama al modelo con el historial y las herramientas. Si el modelo pide herramientas, el registro valida los argumentos con zod (un error de validación vuelve al modelo como resultado), ejecuta la herramienta dentro de `safe()` (nunca lanza) y registra la llamada en `out/log.jsonl` y `out/<caso>/log.jsonl`.
-4. **Confirmación humana (CA3 / RN4):** el modelo pide confirmación llamando a la pseudo-herramienta `agente_solicitar_confirmacion`. El ciclo termina el turno, guarda la acción pendiente y responde con `needsConfirmation: true`; el front muestra un banner con botones Confirmar / Cancelar. Cualquier herramienta llamada con `confirmado: true` sin una confirmación válida para ese caso en el turno actual se rechaza en el registro con «requiere confirmación explícita», aunque el modelo se equivoque.
+4. **Confirmación humana (CA3 / RN4):** el modelo pide confirmación llamando a la pseudo-herramienta `agente_solicitar_confirmacion`. La política del reto valida la acción contra el estado real y el código arma la pregunta, con una advertencia fuerte si el paquete u OC no está listo; el ciclo termina el turno, guarda la acción pendiente y responde con `needsConfirmation: true`; el front muestra un banner con botones Confirmar / Cancelar. Cualquier herramienta llamada con `confirmado: true` sin una confirmación válida para ese caso en el turno actual se rechaza en el registro con «requiere confirmación explícita», aunque el modelo se equivoque.
 5. **Topes:** `MAX_ITERACIONES` (25) por turno, `MAX_TOKENS_SESION` por sesión, `LLM_TIMEOUT_MS` por llamada y un presupuesto de 270 s por turno (la función de Vercel tiene 300 s). Al llegar a un tope, el agente responde con lo que hizo y lo que falta.
 6. **Errores (CA5):** un error del proveedor (clave inválida, límite de tasa, timeout) se traduce a un mensaje claro en el chat; la sesión sigue viva.
 
@@ -76,6 +76,9 @@ Hoy, para `pa-logistica-istmo`, el agente responde «formato no soportado» y pr
 
 | Decisión | Alternativa descartada | Por qué |
 | --- | --- | --- |
+| La pregunta de confirmación la arma el código desde la acción pendiente (con advertencia si no está lista) y solo «sí»/«confirmo» o el botón la aceptan | Dejar que el modelo redacte la pregunta y aceptar verbos como «envía», «registra» o «crea» | Revisión del reto-01: una orden es un pedido, no una confirmación, y la advertencia de un paquete u OC incompleto no puede depender del texto del modelo. |
+| Estado por sesión en la web: cada sesión trabaja en `out/<sessionId>/`, que parte de cero y pertenece al usuario que ingresó; `demo.ts` sigue escribiendo en `out/` | Un único `out/` compartido en Blob | Revisión: en producción todas las sesiones compartían el estado, así que la demo de la sección 11 no se podía reproducir. |
+| Ingreso propio con usuario y contraseña (`/login`), cookie `HttpOnly`/`Secure`/`SameSite=Lax` firmada con HMAC y vencimiento de 8 h | `ACCESS_KEY` en una cabecera o en la URL; Vercel Deployment Protection | Una pantalla de ingreso es lo esperable para un evaluador, la clave no viaja en la URL y las sesiones quedan asociadas a un usuario. |
 | Mapeo determinista: glosario normalizado y similitud de palabras con umbrales 0.8 / 0.5 | Pedirle al modelo que mapee etiquetas | El modelo podría «completar» un campo con un valor plausible (riesgo del PRD). Con reglas, el resultado es trazable, testeable y la demo corre sin clave. |
 | El estado del caso (mapeo, formulario, soportes) lo guarda la herramienta; `generar_formulario` ignora el mapeo que manda el modelo | Usar el `mapeo` recibido como argumento | Evita que el modelo altere un valor entre mapear y generar (CA2 por diseño). |
 | Confirmación garantizada en el registro de herramientas, con una pseudo-herramienta para pedirla | Solo una instrucción en el prompt | El prompt puede fallar; el código no deja ejecutar `confirmado: true` sin un «sí» del usuario en el turno anterior. |
@@ -85,8 +88,10 @@ Hoy, para `pa-logistica-istmo`, el agente responde «formato no soportado» y pr
 
 ## 7. Supuestos
 
-- La fecha de referencia para vigencias es 2026-09-03 (fecha del PRD), configurable con `FECHA_REFERENCIA`. Con la fecha real del sistema, la Cámara de Comercio (vigente hasta 2026-09-30) saldría vencida y bloquearía todos los casos.
-- «Enviar» se permite aunque el paquete no esté listo para firma, porque el PRD espera `ENVIO-SIMULADO.md` para `ec-corp-andina` (que no está listo). El archivo deja constancia de los soportes pendientes y el agente lo advierte antes de pedir confirmación.
+- La fecha de referencia para vigencias es la fecha de ejecución (hoy, hora de Colombia), como pide HU-4; `FECHA_REFERENCIA` la fija si hace falta reproducir otra fecha. Con la fecha de hoy la Cámara de Comercio (vigente hasta 2026-09-30) está vencida, así que **ningún caso queda listo para firma**; con `FECHA_REFERENCIA=2026-09-03` quedan listos `co-industrias-delta` y `pa-logistica-istmo`.
+- «Enviar» se permite aunque el paquete no esté listo para firma, porque el PRD espera `ENVIO-SIMULADO.md` para `ec-corp-andina` (que no está listo). Procesar un caso no deja el envío pendiente: solo «envía» lo propone, el código arma la pregunta con una advertencia fuerte y la lista de pendientes, y solo un «sí»/«confirmo» lo ejecuta. El archivo deja constancia de los pendientes.
+- El borrador de correo solo adjunta soportes vigentes (y solo esos se copian al paquete). Si el paquete no está listo, va encabezado con «BORRADOR — no enviar» y los pendientes, y no dice «firmado». `proveedor_armar_paquete` devuelve el texto del borrador, que no contiene datos bancarios.
+- Rearmar un paquete lo regenera desde cero y borra cualquier `ENVIO-SIMULADO.md` anterior.
 - El país se llena con el código del maestro (`CO`) y los ingresos anuales con una nota de moneda y año (COP, 2025).
 - Para el caso portal, `generar_formulario` devuelve `ok: false` con «formato no soportado» y aun así escribe `valores-portal.md`, como pide HU-3.
 - En las celdas faltantes del Excel el valor queda vacío, resaltado en amarillo y con una nota; las que requieren confirmación quedan en naranja.
@@ -98,7 +103,7 @@ Hoy, para `pa-logistica-istmo`, el agente responde «formato no soportado» y pr
 | HU-1 Leer la solicitud | Hecho | `proveedor_leer_solicitud`; etiquetas ambiguas en `requiere_confirmacion` con el equivalente del país | Leer el correo real y los adjuntos binarios (xlsx/pdf) en vez de fixtures normalizados. |
 | HU-2 Mapear campos | Hecho | 3 estados, ruta del maestro, glosario normalizado, RN1 | Un dueño del glosario y del maestro; revisión periódica de sinónimos nuevos. |
 | HU-3 Generar formulario | Hecho (P0 xlsx, P1 pdf, P2 portal como valores) | `out/<caso>/formulario.xlsx`, `formulario.pdf`, `valores-portal.md` | Escribir sobre la plantilla original del cliente cuando la envíe; automatizar portales (sección 5). |
-| HU-4 Paquete para firma | Hecho | `paquete/` con formulario, soportes, `checklist.md`, `borrador-correo.md`; vencido o ausente bloquea | Integración con firma electrónica y correo (fuera de alcance). |
+| HU-4 Paquete para firma | Hecho | `paquete/` con formulario, soportes vigentes, `checklist.md`, `borrador-correo.md`; vencido o ausente bloquea; vigencias a la fecha de ejecución | Integración con firma electrónica y correo (fuera de alcance). |
 | HU-5 Manejo de errores | Hecho | Caso inexistente, plantilla corrupta y formato no soportado en `demo.ts`; herramientas sin excepciones | Alertas operativas sobre errores repetidos. |
 | Despliegue (link) | Hecho | https://perxia-reto-01-one.vercel.app con OpenAI `gpt-5.5` y Vercel Blob privado; prompt de la sección 11 probado en producción | Dominio propio y monitoreo de errores. |
 | Bonus `modulo/` | Hecho | Generado desde las mismas fuentes; `bun run build:modulo --check` en CI | — |
@@ -112,9 +117,11 @@ Hoy, para `pa-logistica-istmo`, el agente responde «formato no soportado» y pr
 
 | Riesgo | Mitigación |
 | --- | --- |
+| Acceso al link público | Ingreso con usuario y contraseña en variables sensibles de Vercel, comparación en tiempo constante, cookie firmada de 8 h y bloqueo de 15 min tras 5 intentos fallidos por IP. El bloqueo vive en la memoria de cada instancia: en producción iría a un almacén compartido (o a un proveedor de identidad con MFA) y habría un usuario por persona. |
+| Espacios de sesión que se acumulan en Blob | Cada sesión ocupa `out/<sessionId>/`; en producción, una limpieza programada de sesiones viejas. |
 | El modelo afirma un valor que no salió de una herramienta | Las herramientas son la única fuente; el prompt lo prohíbe y los documentos se generan desde el estado guardado por la herramienta, no desde el texto del modelo. Revisión humana antes de firmar. |
 | Plantillas reales más variadas que los fixtures | Umbral de confianza: lo dudoso queda en `requiere_confirmacion`; ampliar el glosario con cada caso nuevo. |
 | Maestro o soportes desactualizados | Dueño del dato y alerta de soportes que vencen en los próximos 30 días. |
 | Concurrencia en Vercel Blob: añadir una línea a un log es leer y reescribir el archivo | Aceptable para una analista; en producción, logs en una cola o base de datos y escritura atómica por caso. |
-| Gasto descontrolado de la clave del modelo | Topes de iteraciones, tokens por sesión y tiempo por turno; `ACCESS_KEY` para el link público. |
+| Gasto descontrolado de la clave del modelo | Topes de iteraciones, tokens por sesión y tiempo por turno; el link exige ingreso con usuario y contraseña. |
 | Exposición de datos bancarios | Enmascarados en logs y tarjetas del chat; nunca en el borrador de correo (test que lo verifica). |

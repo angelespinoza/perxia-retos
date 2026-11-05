@@ -30,7 +30,7 @@ async function generar(): Promise<Record<string, string>> {
     "modulo/tools/proveedor.ts": [
       "// Mismas herramientas que usa la aplicación: re-export de src/tools/proveedor.ts, importable sin el servidor.",
       'export * from "../../src/tools/proveedor.ts"',
-      'export { solicitar_confirmacion } from "../../src/core/confirm.ts"',
+      'export { solicitar_confirmacion } from "../../src/confirmacion.ts"',
       "",
     ].join("\n"),
     "modulo/skill/registro-proveedor/SKILL.md": [

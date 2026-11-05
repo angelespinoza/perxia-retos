@@ -1,7 +1,6 @@
 // Herramientas del agente "Registro como Proveedor". Cada export se expone al modelo como proveedor_<export>.
 import { z } from "zod"
 import { fail, ok } from "../core/result.ts"
-import type { Storage } from "../core/storage.ts"
 import { defineTool, type ToolCtx } from "../core/types.ts"
 import {
   generarBorradorCorreo,
@@ -26,17 +25,11 @@ import {
   type Solicitud,
   validarCaso,
 } from "../domain/fixtures.ts"
+import { guardarEstado, leerEstado, pendientesDelPaquete } from "../domain/estado.ts"
 import { agrupar, type CampoMapeado, camposAmbiguos, mapearCampos } from "../domain/mapeo.ts"
-import { evaluarSoportes, listoParaFirma, type SoporteEvaluado } from "../domain/soportes.ts"
+import { evaluarSoportes, listoParaFirma } from "../domain/soportes.ts"
 
 type Plantilla = { tipo: "celdas"; celdas: Celda[] } | { tipo: "campos"; campos: CampoPlantilla[] }
-
-interface EstadoCaso {
-  campos?: CampoMapeado[]
-  formulario?: { ruta: string; formato: string }
-  soportes?: SoporteEvaluado[]
-  listo_para_firma?: boolean
-}
 
 const argCaso = z.string().describe("Nombre de la carpeta del caso en fixtures/reto-01/casos/, por ejemplo 'ec-corp-andina'")
 
@@ -49,17 +42,6 @@ async function cargarPlantilla(ctx: ToolCtx, solicitud: Solicitud, caso: string)
 
 function etiquetasDe(plantilla: Plantilla): string[] {
   return plantilla.tipo === "celdas" ? plantilla.celdas.map((c) => c.etiqueta) : plantilla.campos.map((c) => c.etiqueta)
-}
-
-async function leerEstado(storage: Storage, caso: string): Promise<EstadoCaso> {
-  const texto = await storage.leerTexto(`${caso}/estado.json`)
-  return texto ? (JSON.parse(texto) as EstadoCaso) : {}
-}
-
-async function guardarEstado(storage: Storage, caso: string, cambios: EstadoCaso): Promise<EstadoCaso> {
-  const estado = { ...(await leerEstado(storage, caso)), ...cambios }
-  await storage.escribir(`${caso}/estado.json`, JSON.stringify(estado, null, 2))
-  return estado
 }
 
 /** El mapeo siempre sale de la herramienta (D6): se usa el guardado o se recalcula, nunca el del modelo. */
@@ -240,24 +222,29 @@ export const armar_paquete = defineTool({
         advertencias.push(`${e.message}: el paquete se arma sin formulario`)
       }
 
+      // Rearmar parte de cero: se borra el paquete anterior y cualquier ENVIO-SIMULADO.md previo.
       const destino = `${caso}/paquete`
+      await ctx.storage.borrar([...(await ctx.storage.listar(`${destino}/`)), `${caso}/ENVIO-SIMULADO.md`])
       if (formulario) {
         const bytes = await ctx.storage.leer(formulario.ruta)
         const nombre = formulario.ruta.split("/").at(-1) ?? "formulario"
         if (bytes) await ctx.storage.escribir(`${destino}/${nombre}`, bytes)
       }
+      // Solo se copian los soportes vigentes; los vencidos y ausentes quedan en el checklist.
       for (const s of soportes) {
-        if (s.archivo) await ctx.storage.escribir(`${destino}/soportes/${s.archivo}`, await leerArchivoSoporte(ctx.directory, s.archivo))
+        if (s.archivo && s.estado === "presente") await ctx.storage.escribir(`${destino}/soportes/${s.archivo}`, await leerArchivoSoporte(ctx.directory, s.archivo))
       }
       const listo = listoParaFirma(soportes) && formulario !== null
       await ctx.storage.escribir(
         `${destino}/checklist.md`,
         generarChecklist(solicitud, soportes, campos, listo, ctx.fechaReferencia),
       )
-      await ctx.storage.escribir(
-        `${destino}/borrador-correo.md`,
-        generarBorradorCorreo(solicitud, soportes, formulario?.ruta.split("/").at(-1) ?? "formulario"),
-      )
+      const pendientes = pendientesDelPaquete(soportes, formulario !== null)
+      const borrador = generarBorradorCorreo(solicitud, soportes, formulario?.ruta.split("/").at(-1) ?? "formulario", {
+        listo,
+        pendientes,
+      })
+      await ctx.storage.escribir(`${destino}/borrador-correo.md`, borrador)
       await guardarEstado(ctx.storage, caso, { soportes, listo_para_firma: listo })
       return ok({
         ruta: `out/${destino}/`,
@@ -266,7 +253,10 @@ export const armar_paquete = defineTool({
         campos_faltantes: campos.filter((c) => c.estado === "faltante").map((c) => c.etiqueta),
         campos_por_confirmar: campos.filter((c) => c.estado === "requiere_confirmacion").map((c) => c.etiqueta),
         fecha_referencia: ctx.fechaReferencia,
+        pendientes,
         advertencias,
+        // Sin datos bancarios (RN2): el borrador solo menciona los soportes y el formulario.
+        borrador_correo: borrador,
       })
     })(ctx)
   },
@@ -280,6 +270,7 @@ export const simular_envio = defineTool({
     confirmado: z.boolean().describe("true solo si el usuario confirmó el envío en su último mensaje"),
   },
   efecto: "externa",
+  confirma: "simular_envio",
   async execute({ caso, confirmado }, ctx) {
     return conErrores(async () => {
       if (!confirmado) return fail("requiere confirmación explícita")
@@ -287,7 +278,7 @@ export const simular_envio = defineTool({
       const estado = await leerEstado(ctx.storage, caso)
       if (estado.listo_para_firma === undefined) return fail("primero arma el paquete con proveedor_armar_paquete")
       const solicitud = await leerSolicitud(ctx.directory, caso)
-      const pendientes = (estado.soportes ?? []).filter((s) => s.estado !== "presente").map((s) => `${s.tipo} (${s.estado})`)
+      const pendientes = pendientesDelPaquete(estado.soportes ?? [], estado.formulario !== undefined)
       const contenido = [
         `# Envío simulado — ${solicitud.cliente}`,
         "",

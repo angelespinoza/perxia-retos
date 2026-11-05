@@ -10,6 +10,8 @@ export interface Storage {
   escribir(ruta: string, contenido: string | Uint8Array): Promise<void>
   anexar(ruta: string, linea: string): Promise<void>
   listar(prefijo: string): Promise<string[]>
+  /** Borra estos archivos (los que no existen se ignoran). */
+  borrar(rutas: string[]): Promise<void>
   borrarTodo(): Promise<void>
 }
 
@@ -69,6 +71,10 @@ export class FsStorage implements Storage {
     return archivos.sort()
   }
 
+  async borrar(rutas: string[]): Promise<void> {
+    await Promise.all(rutas.map((r) => rm(this.abs(r), { force: true })))
+  }
+
   async borrarTodo(): Promise<void> {
     await rm(this.raiz, { recursive: true, force: true })
     await mkdir(this.raiz, { recursive: true })
@@ -116,9 +122,54 @@ export class BlobStorage implements Storage {
     return rutas.sort()
   }
 
-  async borrarTodo(): Promise<void> {
-    const rutas = await this.listar("")
+  async borrar(rutas: string[]): Promise<void> {
     if (rutas.length > 0) await del(rutas.map((r) => this.clave(r)))
+  }
+
+  async borrarTodo(): Promise<void> {
+    await this.borrar(await this.listar(""))
+  }
+}
+
+/** Espacio propio de una sesión web: out/<sessionId>/... Parte vacío, así cada sesión empieza de cero
+ * (buzón sin procesar, copia limpia del maestro, sin OC previas). demo.ts usa el Storage base (out/). */
+export class EspacioStorage implements Storage {
+  readonly tipo: Storage["tipo"]
+  private readonly prefijo: string
+  constructor(
+    private readonly base: Storage,
+    espacio: string,
+  ) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(espacio)) throw new Error(`espacio inválido: ${espacio}`)
+    this.tipo = base.tipo
+    this.prefijo = `${espacio}/`
+  }
+
+  private ruta(r: string): string {
+    return `${this.prefijo}${rutaSegura(r)}`
+  }
+
+  leer(r: string) {
+    return this.base.leer(this.ruta(r))
+  }
+  leerTexto(r: string) {
+    return this.base.leerTexto(this.ruta(r))
+  }
+  escribir(r: string, contenido: string | Uint8Array) {
+    return this.base.escribir(this.ruta(r), contenido)
+  }
+  anexar(r: string, linea: string) {
+    return this.base.anexar(this.ruta(r), linea)
+  }
+  async listar(prefijo: string): Promise<string[]> {
+    const rutas = await this.base.listar(prefijo ? this.ruta(prefijo) : this.prefijo)
+    return rutas.filter((r) => r.startsWith(this.prefijo)).map((r) => r.slice(this.prefijo.length))
+  }
+  borrar(rutas: string[]) {
+    return this.base.borrar(rutas.map((r) => this.ruta(r)))
+  }
+  async borrarTodo(): Promise<void> {
+    await this.borrar(await this.listar(""))
   }
 }
 

@@ -159,3 +159,34 @@ details.tool pre { margin: 0; padding: 8px 10px; border-top: 1px solid var(--bor
   .barra .sub { display: none; }
   .confirmacion { flex-direction: column; align-items: stretch; }
 }
+
+/* El display:flex de .confirmacion anulaba el atributo hidden: la barra quedaba visible y vacía. */
+.confirmacion[hidden] { display: none; }
+.confirmacion .advertencia { color: var(--error); font-weight: 600; }
+
+/* Pantalla de ingreso */
+.ingreso { flex: 1; display: grid; place-items: center; padding: 24px 16px; }
+.tarjeta-ingreso {
+  width: 100%;
+  max-width: 380px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tarjeta-ingreso label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--texto-suave); }
+.tarjeta-ingreso input {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--borde);
+  background: var(--fondo);
+  color: var(--texto);
+}
+.tarjeta-ingreso button { width: 100%; }
+.aviso-login { margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--error); background: var(--aviso-fondo); border: 1px solid var(--aviso-borde); }
+.aviso-login.neutro { color: var(--texto); }
+.salir { margin: 0; }

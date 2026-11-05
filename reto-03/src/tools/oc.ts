@@ -2,9 +2,9 @@
 // Orden: leer_paquete → validar → generar_evidencia → construir_payload → crear.
 import { z } from "zod"
 import { fail, ok } from "../core/result.ts"
-import type { Storage } from "../core/storage.ts"
 import { defineTool, type ToolCtx } from "../core/types.ts"
 import { registrarControl, type ResultadoControl } from "../domain/control.ts"
+import { guardarEstado, leerEstado } from "../domain/estado.ts"
 import { ErrorFixture, leerArchivosCaso, leerMaestros, listarCasos, validarCaso } from "../domain/fixtures.ts"
 import {
   construirOrden,
@@ -19,14 +19,6 @@ import { type ResultadoValidacion, validarPaquete } from "../domain/reglas.ts"
 import type { SapAdapter } from "../sap/adapter.ts"
 import { MockSap } from "../sap/mock.ts"
 
-interface EstadoCaso {
-  paquete_leido?: boolean
-  validacion?: ResultadoValidacion
-  evidencia?: { ruta: string; ruta_pdf: string; sha256: string }
-  payload?: { ruta: string; trazabilidad: string; hash: string }
-  oc?: { numero_oc: string; fecha: string }
-}
-
 const argCaso = z.string().describe("Nombre de la carpeta del caso en fixtures/reto-03/solicitudes/, por ejemplo 'sol-004'")
 const argPaquete = z
   .record(z.string(), z.unknown())
@@ -40,17 +32,6 @@ export function usarSap(fabrica: (ctx: ToolCtx) => SapAdapter): void {
 }
 
 // ---------- utilidades internas ----------
-
-async function leerEstado(storage: Storage, caso: string): Promise<EstadoCaso> {
-  const texto = await storage.leerTexto(`${caso}/estado.json`)
-  return texto ? (JSON.parse(texto) as EstadoCaso) : {}
-}
-
-async function guardarEstado(storage: Storage, caso: string, cambios: EstadoCaso): Promise<EstadoCaso> {
-  const estado = { ...(await leerEstado(storage, caso)), ...cambios }
-  await storage.escribir(`${caso}/estado.json`, JSON.stringify(estado, null, 2))
-  return estado
-}
 
 /** El paquete y la validación siempre se recalculan desde los fixtures: nunca se confía en lo que envía el modelo. */
 async function paqueteDe(ctx: ToolCtx, caso: string): Promise<Paquete> {
@@ -201,6 +182,7 @@ export const crear = defineTool({
       .describe("true solo si el usuario confirmó las excepciones en su último mensaje"),
   },
   efecto: "externa",
+  confirma: "crear_oc",
   async execute({ caso, payload, confirmado }, ctx) {
     return conErrores(async () => {
       const { paquete, validacion } = await validarDesdeFixtures(ctx, caso)

@@ -77,4 +77,19 @@ describe("borrador de correo (RN2)", () => {
     expect(correo).not.toContain("03100012345")
     expect(correo).not.toContain("COLOCOBM")
   })
+
+  test("solo adjunta soportes vigentes y, si no está listo, no dice «firmado»", async () => {
+    const s = await leerSolicitud(dir, "hn-agroexport-sula")
+    const soportes = evaluarSoportes(["camara_comercio", "rut", "parafiscales"], await leerIndiceSoportes(dir), "2026-09-03")
+    const pendientes = ["parafiscales: vencido"]
+    const borrador = generarBorradorCorreo(s, soportes, "formulario.pdf", { listo: false, pendientes })
+    expect(borrador.startsWith("> **BORRADOR — no enviar.**")).toBe(true)
+    expect(borrador).toContain("parafiscales: vencido")
+    expect(borrador).not.toContain("firmado")
+    const parafiscales = soportes.find((x) => x.tipo === "parafiscales")
+    expect(borrador).not.toContain(`- ${parafiscales?.descripcion}`)
+    const listo = generarBorradorCorreo(s, soportes.filter((x) => x.estado === "presente"), "formulario.pdf", { listo: true, pendientes: [] })
+    expect(listo).toContain("firmado por nuestro representante legal")
+    expect(listo).not.toContain("BORRADOR")
+  })
 })

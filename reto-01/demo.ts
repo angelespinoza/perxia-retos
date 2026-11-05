@@ -85,7 +85,7 @@ async function demostrarConfirmacion(): Promise<void> {
   const confirmacion: ConfirmacionTurno = {
     accion: "simular_envio",
     referencia: "co-industrias-delta",
-    resumen: "El usuario respondió «envía».",
+    resumen: "El usuario respondió «sí» a la pregunta de confirmación.",
   }
   const con = await llamar("proveedor_simular_envio", { caso: "co-industrias-delta", confirmado: true }, {
     ...ctxBase,

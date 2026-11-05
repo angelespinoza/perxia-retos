@@ -8,7 +8,7 @@ import { registro } from "../src/agente.ts"
 import { esAfirmativo } from "../src/core/confirm.ts"
 import { ejecutarTurno, type ConfigCiclo } from "../src/core/loop.ts"
 import { nuevaSesion } from "../src/core/session.ts"
-import { FsStorage } from "../src/core/storage.ts"
+import { EspacioStorage, FsStorage } from "../src/core/storage.ts"
 import type { LlmAdapter, Mensaje, RespuestaLlm, ToolCall } from "../src/llm/adapter.ts"
 
 const config: ConfigCiclo = { maxIteraciones: 25, maxTokensSesion: 1_000_000, timeoutMs: 1000, presupuestoMs: 60_000 }
@@ -51,6 +51,9 @@ describe("confirmación humana (CA3)", () => {
   test("detecta confirmaciones y negaciones", () => {
     expect(esAfirmativo("confirmo")).toBe(true)
     expect(esAfirmativo("Sí, créala.")).toBe(true)
+    expect(esAfirmativo("créala")).toBe(false)
+    expect(esAfirmativo("crea la OC")).toBe(false)
+    expect(esAfirmativo("procede")).toBe(false)
     expect(esAfirmativo("no la crees todavía")).toBe(false)
     expect(esAfirmativo("¿por qué difiere la cotización?")).toBe(false)
   })
@@ -77,6 +80,10 @@ describe("confirmación humana (CA3)", () => {
     expect(t1.needsConfirmation).toBe(true)
     expect(t1.pendiente?.referencia).toBe(caso)
     expect(t1.reply).toContain("26.500.000")
+    // La pregunta y la advertencia (RC5) las arma el código desde la validación, no el modelo.
+    expect(t1.pendiente?.advertencia).toContain("RC5")
+    expect(t1.reply).toContain("¿Confirmas la creación de la OC de sol-004")
+    expect(t1.reply).toContain("ATENCIÓN")
     expect(t1.toolCalls.map((t) => t.herramienta)).toEqual([
       "oc_leer_paquete",
       "oc_validar",
@@ -129,6 +136,51 @@ describe("confirmación humana (CA3)", () => {
     expect(t.toolCalls[4]?.resumen).toContain("idempotente: false")
     expect(t.toolCalls[5]?.resumen).toContain("numero_oc: 4500000001")
     expect(t.toolCalls[5]?.resumen).toContain("idempotente: true")
+  })
+})
+
+describe("confirmación y espacio por sesión (A1 / A2)", () => {
+  test("«créala» en respuesta a la pregunta no crea la OC", async () => {
+    const { storage, ctxBase } = await entorno()
+    const sesion = nuevaSesion("orden")
+    const adapter = adaptadorGuionado([
+      ...pasosHastaPayload(caso),
+      respuesta([llamada("5", "agente_solicitar_confirmacion", { accion: "crear_oc", referencia: caso, resumen: "x" })], "La OC de sol-004 tiene una diferencia con la cotización (RC5) que debes revisar."),
+      respuesta([llamada("6", "oc_crear", { caso, confirmado: true })]),
+      respuesta([], "No pude crearla."),
+    ])
+    const base = { sesion, adapter, registro, system: "", ctxBase, config }
+    expect((await ejecutarTurno({ ...base, mensaje: `Procesa "${caso}" y no la crees hasta que confirme.` })).needsConfirmation).toBe(true)
+    const t2 = await ejecutarTurno({ ...base, mensaje: "créala" })
+    expect(t2.toolCalls[0]?.ok).toBe(false)
+    expect(await storage.leer("sap/ordenes.jsonl")).toBeNull()
+  })
+
+  test("no se pide confirmación de una solicitud con bloqueos o sin payload", async () => {
+    const { ctxBase } = await entorno()
+    const adapter = adaptadorGuionado([
+      respuesta([llamada("1", "agente_solicitar_confirmacion", { accion: "crear_oc", referencia: caso, resumen: "x" })]),
+      respuesta([], "Falta construir el payload."),
+    ])
+    const t = await ejecutarTurno({ sesion: nuevaSesion("q"), mensaje: "crea la OC", adapter, registro, system: "", ctxBase, config })
+    expect(t.needsConfirmation).toBe(false)
+    expect(t.toolCalls[0]?.resumen).toContain("oc_construir_payload")
+  })
+
+  test("las OC de una sesión no existen en otra: cada sesión parte sin OC previas", async () => {
+    const base = new FsStorage(await mkdtemp(join(tmpdir(), "reto03-esp-")))
+    const ctx = (id: string) => ({
+      directory: process.cwd(), sessionId: id, fechaReferencia: "2026-09-03", storage: new EspacioStorage(base, id), confirmacion: null,
+    })
+    const crear = async (id: string) => {
+      for (const paso of ["oc_leer_paquete", "oc_validar", "oc_generar_evidencia", "oc_construir_payload"])
+        await registro.ejecutar(paso, { caso: "sol-001" }, ctx(id))
+      return registro.ejecutar("oc_crear", { caso: "sol-001" }, ctx(id))
+    }
+    expect((await crear("a")).resumen).toContain("idempotente: false")
+    expect((await crear("b")).resumen).toContain("idempotente: false")
+    expect(await base.leerTexto("a/sap/ordenes.jsonl")).toContain("SOL-2026-001")
+    expect(await base.leer("sap/ordenes.jsonl")).toBeNull()
   })
 })
 

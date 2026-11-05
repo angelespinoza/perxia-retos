@@ -32,10 +32,10 @@ El núcleo (`src/core/`, `src/llm/`, `src/server.ts`, `web/`) es el mismo de la 
 
 ## 3. Ciclo del agente
 
-1. `POST /api/chat` carga la sesión desde el `Storage` (`sessions/<id>.json`), para que funcione aunque cada request caiga en otra instancia de Vercel.
-2. Si la sesión tenía una confirmación pendiente y el mensaje es afirmativo («sí», «confirmo», «registra»…), la confirmación vale **solo para ese turno** y **solo para el mensaje del buzón que se preguntó**. Cualquier otro mensaje la descarta.
+1. `POST /api/chat` exige sesión iniciada por `/login` y carga la sesión del usuario desde el `Storage` (`sessions/<id>.json`); las herramientas trabajan en el espacio `out/<sessionId>/` de esa sesión,, para que funcione aunque cada request caiga en otra instancia de Vercel.
+2. Si la sesión tenía una confirmación pendiente y el mensaje responde «sí» o «confirmo» (o es el botón Confirmar), esa confirmación vale **solo para este turno** y solo para la acción y la referencia que se preguntaron. Los verbos de orden («envía», «registra», «crea») son pedidos, no confirmaciones; cualquier otro mensaje descarta la pendiente.
 3. El ciclo llama al modelo con el historial y las herramientas. El prompt pide llamadas en paralelo (extraer los 6 a la vez, validar los 6 a la vez, registrar los limpios a la vez), así el prompt de la sección 11 se resuelve en unas 6 iteraciones. Cada llamada se valida con zod (el error vuelve al modelo), se ejecuta dentro de `safe()` (nunca lanza) y queda en `out/log.jsonl` con el `mensaje_id` (RN7).
-4. **Confirmación humana (CA3 / RN5):** con campos en revisión, `contratos_registrar` responde `requiere revisión: valor (confianza 0.6), fecha_fin (confianza 0.6)`. El modelo pide confirmación con la pseudo-herramienta `agente_solicitar_confirmacion`; el ciclo termina el turno con `needsConfirmation: true` y el front muestra el banner. Una llamada con `confirmado: true` sin un «sí» del usuario en el turno anterior para ese mismo mensaje se rechaza en el registro de herramientas, aunque el modelo se equivoque.
+4. **Confirmación humana (CA3 / RN5):** con campos en revisión, `contratos_registrar` responde `requiere revisión: valor (confianza 0.6), fecha_fin (confianza 0.6)`. El modelo pide confirmación con la pseudo-herramienta `agente_solicitar_confirmacion`; la política del reto valida la acción contra el estado real y el código arma la pregunta y la advertencia (no el modelo); el ciclo termina el turno con `needsConfirmation: true` y el front muestra el banner. Una llamada con `confirmado: true` sin un «sí» del usuario en el turno anterior para ese mismo mensaje se rechaza en el registro de herramientas, aunque el modelo se equivoque.
 5. **Topes:** `MAX_ITERACIONES` (25) por turno, `MAX_TOKENS_SESION` por sesión, `LLM_TIMEOUT_MS` por llamada y 270 s por turno (la función de Vercel tiene 300 s). Al llegar a un tope, el agente responde con lo hecho y lo que falta.
 6. **Errores (CA5 / HU-6):** un error del proveedor se traduce a un mensaje claro; un error de herramienta (texto vacío, fecha inválida, moneda desconocida) vuelve como `{ ok: false, error }` y el prompt obliga a seguir con el siguiente mensaje.
 
@@ -91,6 +91,9 @@ La extracción es **100 % determinista** (`src/domain/extraccion.ts`): expresion
 
 | Decisión | Alternativa descartada | Por qué |
 | --- | --- | --- |
+| La pregunta de confirmación la arma el código desde la acción pendiente (con advertencia si no está lista) y solo «sí»/«confirmo» o el botón la aceptan | Dejar que el modelo redacte la pregunta y aceptar verbos como «envía», «registra» o «crea» | Revisión del reto-01: una orden es un pedido, no una confirmación, y la advertencia de un paquete u OC incompleto no puede depender del texto del modelo. |
+| Estado por sesión en la web: cada sesión trabaja en `out/<sessionId>/`, que parte de cero y pertenece al usuario que ingresó; `demo.ts` sigue escribiendo en `out/` | Un único `out/` compartido en Blob | Revisión: en producción todas las sesiones compartían el estado, así que la demo de la sección 11 no se podía reproducir. |
+| Ingreso propio con usuario y contraseña (`/login`), cookie `HttpOnly`/`Secure`/`SameSite=Lax` firmada con HMAC y vencimiento de 8 h | `ACCESS_KEY` en una cabecera o en la URL; Vercel Deployment Protection | Una pantalla de ingreso es lo esperable para un evaluador, la clave no viaja en la URL y las sesiones quedan asociadas a un usuario. |
 | Extracción determinista con confianza y evidencia por campo | Pedirle al modelo que extraiga los campos | El riesgo central del PRD es que el modelo «redondee» un valor o infiera una fecha. Con reglas el resultado es trazable, testeable y la demo corre sin clave; lo dudoso va a revisión humana. |
 | `contratos_registrar` recalcula todo y solo acepta valores del usuario en los campos en revisión | Registrar el `contrato` que manda el modelo | Evita que el modelo cambie un valor entre validar y registrar (CA2 por diseño). |
 | `contratos_registrar` también cierra duplicados y rechazados (los marca como procesados sin tocar el maestro) | Que `validar` escriba en `procesados.json` | `validar` queda como lectura pura y hay un solo punto de escritura auditable. |
@@ -102,6 +105,8 @@ La extracción es **100 % determinista** (`src/domain/extraccion.ts`): expresion
 ## 8. Supuestos
 
 - «Hoy» es 2026-09-03 (fecha del PRD), configurable con `FECHA_REFERENCIA`; también es la `fecha_registro` de lo que entra, para que la demo sea determinista.
+- En la web cada sesión parte de un buzón sin procesar y una copia limpia del maestro (su propio `out/<sessionId>/`), así el prompt de la sección 11 siempre encuentra los 6 mensajes. `demo.ts` sigue usando `out/`.
+- El botón Confirmar acepta los valores propuestos de los campos en revisión; «confirmo …» con valores aplica los que indique la analista (solo en los campos en revisión).
 - **msg-006:** el contrato corre 12 meses desde una firma «en el mes de agosto de 2026» sin día. Se propone `fecha_inicio = 2026-08-01` (confianza 0.8, con aviso) y `fecha_fin = 2027-08-31`, el último día del mes en que vence: es la fecha más tardía compatible con el texto y coincide con la que el PRD espera confirmar. Moneda COP, tomada del umbral de la cláusula de garantías.
 - **msg-003:** el otrosí amplía el plazo y dice que las garantías «deberán ampliarse»; se propone `estado_poliza = pendiente` y el cambio queda en el historial. Por eso CT-2026-011 aparece en pólizas pendientes.
 - En una actualización no se cambian `fecha_registro` ni `comercial`; la actualización se reporta en alertas como «actualizados desde el corte», con datos del historial.
@@ -131,10 +136,12 @@ La extracción es **100 % determinista** (`src/domain/extraccion.ts`): expresion
 
 | Riesgo | Mitigación |
 | --- | --- |
+| Acceso al link público | Ingreso con usuario y contraseña en variables sensibles de Vercel, comparación en tiempo constante, cookie firmada de 8 h y bloqueo de 15 min tras 5 intentos fallidos por IP. El bloqueo vive en la memoria de cada instancia: en producción iría a un almacén compartido (o a un proveedor de identidad con MFA) y habría un usuario por persona. |
+| Espacios de sesión que se acumulan en Blob | Cada sesión ocupa `out/<sessionId>/`; en producción, una limpieza programada de sesiones viejas. |
 | Contratos reales con redacciones que las reglas no cubren | Todo lo no reconocido queda `null` o con baja confianza y va a revisión; cada caso nuevo amplía las reglas con su prueba. En un segundo paso, el modelo podría proponer valores que siempre pasan por `validar` y confirmación. |
 | PDF escaneados | OCR antes de la extracción y confianza máxima 0.8 para texto de OCR. |
 | Falsos duplicados por variaciones del nombre del cliente | La deduplicación usa número de contrato y NIT, no el nombre. |
 | El modelo «redondea» un valor o infiere una fecha | El valor registrado sale de la herramienta; el modelo solo transmite lo que la analista confirma y solo en campos en revisión. |
 | Concurrencia en Vercel Blob (el CSV y los logs se reescriben completos) | Aceptable para una analista; en producción, maestro en una lista de SharePoint o base de datos con escritura atómica por fila. |
 | El proceso depende de que los comerciales envíen | Regla de gobierno con acuse, escalamiento e indicador mensual contra facturación. |
-| Gasto de la clave del modelo | Topes de iteraciones, tokens por sesión y tiempo por turno; `ACCESS_KEY` para el link público. |
+| Gasto de la clave del modelo | Topes de iteraciones, tokens por sesión y tiempo por turno; el link exige ingreso con usuario y contraseña. |

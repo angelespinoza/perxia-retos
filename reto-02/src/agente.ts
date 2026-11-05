@@ -2,13 +2,15 @@
 import { readdir, readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import * as agente from "./core/confirm.ts"
+import { solicitar_confirmacion } from "./confirmacion.ts"
 import { crearRegistro } from "./core/registry.ts"
 import * as contratos from "./tools/contratos.ts"
 
 /** Raíz del proyecto (donde viven agent/, fixtures/ y src/knowledge/), calculada desde este archivo:
  * en Vercel el directorio de trabajo no coincide con la carpeta del reto. */
 export const DIRECTORIO = process.env.APP_DIR || dirname(dirname(fileURLToPath(import.meta.url)))
+
+const agente = { solicitar_confirmacion }
 
 export const registro = crearRegistro({ contratos, agente })
 

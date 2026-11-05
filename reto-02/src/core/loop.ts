@@ -1,6 +1,6 @@
 // Ciclo del agente: prompt → modelo → herramientas → respuesta, con topes de iteraciones, tokens y tiempo.
 import { ErrorProveedor, type LlmAdapter, type ResultadoHerramienta } from "../llm/adapter.ts"
-import { NOMBRE_PSEUDO, resolverConfirmacion } from "./confirm.ts"
+import { NOMBRE_PSEUDO, resolverConfirmacion, textoPregunta } from "./confirm.ts"
 import { enmascarar } from "./log.ts"
 import type { Ejecucion, Registro } from "./registry.ts"
 import type { EventoChat, Sesion } from "./session.ts"
@@ -37,7 +37,7 @@ export interface ParametrosTurno {
   errorConfiguracion?: string
   registro: Registro
   system: string
-  ctxBase: Omit<ToolCtx, "confirmacion" | "sessionId">
+  ctxBase: Omit<ToolCtx, "confirmacion" | "sessionId" | "mensajeUsuario">
   config: ConfigCiclo
 }
 
@@ -84,7 +84,7 @@ export async function ejecutarTurno(p: ParametrosTurno): Promise<RespuestaTurno>
   if (sesion.uso.entrada + sesion.uso.salida >= config.maxTokensSesion)
     return terminar("Esta sesión alcanzó su tope de tokens. Abre una sesión nueva para continuar.", { error: true })
 
-  const ctx: ToolCtx = { ...p.ctxBase, sessionId: sesion.id, confirmacion }
+  const ctx: ToolCtx = { ...p.ctxBase, sessionId: sesion.id, confirmacion, mensajeUsuario: p.mensaje }
 
   for (let i = 0; i < config.maxIteraciones; i++) {
     if (Date.now() - inicio > config.presupuestoMs) return terminar(cierreParcial(llamadas, "el tiempo máximo del turno"))
@@ -110,7 +110,7 @@ export async function ejecutarTurno(p: ParametrosTurno): Promise<RespuestaTurno>
       llamadas.push(ej)
       evento(sesion, { tipo: "herramienta", herramienta: ej.herramienta, args: argsVisibles(ej.args), ok: ej.ok, resumen: ej.resumen })
       resultados.push({ id: llamada.id, nombre: llamada.nombre, contenido: ej.resultado, esError: !ej.ok })
-      if (llamada.nombre === NOMBRE_PSEUDO && ej.ok) pendiente = pendienteDe(llamada.args)
+      if (llamada.nombre === NOMBRE_PSEUDO && ej.ok) pendiente = pendienteDe(llamada.args, ej.resultado)
     }
     sesion.mensajes.push({ rol: "herramienta", resultados })
 
@@ -118,14 +118,14 @@ export async function ejecutarTurno(p: ParametrosTurno): Promise<RespuestaTurno>
       sesion.pendiente = pendiente
       // Si el modelo pidió confirmación sin escribir el resumen, se le pide redactarlo (sin ejecutar más herramientas).
       const texto = r.texto.trim().length >= 80 ? r.texto : await redactarCierre(p, r.texto)
-      return terminar(preguntaConfirmacion(texto, pendiente), { needsConfirmation: true, pendiente })
+      return terminar(`${texto.trim()}\n\n${textoPregunta(pendiente)}`.trim(), { needsConfirmation: true, pendiente })
     }
   }
   return terminar(cierreParcial(llamadas, `el tope de ${config.maxIteraciones} pasos`))
 }
 
 const INSTRUCCION_CIERRE =
-  "La confirmación quedó registrada. Ahora escribe al usuario el resumen de lo hecho según tus instrucciones y termina con la pregunta de confirmación. No llames herramientas."
+  "La acción quedó pendiente de confirmación. Ahora escribe al usuario el resumen de lo hecho según tus instrucciones. No escribas la pregunta de confirmación (el sistema la agrega al final) y no llames herramientas."
 
 /** Una llamada más para obtener el texto del cierre; las herramientas que pida se registran como no ejecutadas. */
 async function redactarCierre(p: ParametrosTurno, textoPrevio: string): Promise<string> {
@@ -153,15 +153,18 @@ async function redactarCierre(p: ParametrosTurno, textoPrevio: string): Promise<
   }
 }
 
-function pendienteDe(args: Record<string, unknown>): ConfirmacionTurno {
+/** Acción pendiente con la pregunta y la advertencia que armó la política del reto (no el modelo). */
+function pendienteDe(args: Record<string, unknown>, resultado: string): ConfirmacionTurno {
   const texto = (v: unknown) => (typeof v === "string" ? v : "")
-  return { accion: texto(args.accion), referencia: texto(args.referencia), resumen: texto(args.resumen) }
-}
-
-function preguntaConfirmacion(texto: string, pendiente: ConfirmacionTurno): string {
-  if (texto.includes("?")) return texto
-  const pregunta = `¿Confirmas ${pendiente.accion} para ${pendiente.referencia}? ${pendiente.resumen}`.trim()
-  return texto ? `${texto}\n\n${pregunta}` : pregunta
+  const pendiente: ConfirmacionTurno = { accion: texto(args.accion), referencia: texto(args.referencia), resumen: texto(args.resumen) }
+  try {
+    const { data } = JSON.parse(resultado) as { data?: { pregunta?: unknown; advertencia?: unknown } }
+    if (texto(data?.pregunta)) pendiente.pregunta = texto(data?.pregunta)
+    if (texto(data?.advertencia)) pendiente.advertencia = texto(data?.advertencia)
+  } catch {
+    /* sin descripción: textoPregunta usa una genérica */
+  }
+  return pendiente
 }
 
 function cierreParcial(llamadas: Ejecucion[], motivo: string): string {

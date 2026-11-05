@@ -16,11 +16,21 @@ const almacen = {
 
 let sessionId = almacen.leer("sessionId")
 
-function cabeceras() {
-  const h = { "content-type": "application/json" }
-  const clave = almacen.leer("accessKey")
-  if (clave) h["x-access-key"] = clave
-  return h
+const cabeceras = () => ({ "content-type": "application/json" })
+
+/** Sin sesión iniciada (cookie vencida o ausente) se vuelve a la pantalla de ingreso. */
+function revisarIngreso(r) {
+  if (r?.status === 401) { location.href = "/login"; return false }
+  return true
+}
+
+/** Los archivos de cada sesión viven en out/<sessionId>/: «out/x» en el chat apunta a /out/<sessionId>/x. */
+function hrefOut(ruta) {
+  return sessionId ? `/out/${encodeURIComponent(sessionId)}/${encodeURI(ruta.replace(/^out\//, ""))}` : "#"
+}
+
+function actualizarEnlacesFijos() {
+  for (const a of document.querySelectorAll("[data-out]")) a.href = hrefOut(a.dataset.out)
 }
 
 function escapar(t) {
@@ -31,7 +41,7 @@ function enLinea(t) {
   return escapar(t)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[\s(])(out\/[\w./-]+[\w/])/g, (_m, pre, ruta) => `${pre}<a href="/${ruta}" target="_blank" rel="noopener">${ruta}</a>`)
+    .replace(/(^|[\s(])(out\/[\w./-]+[\w/])/g, (_m, pre, ruta) => `${pre}<a href="${hrefOut(ruta)}" target="_blank" rel="noopener">${ruta}</a>`)
 }
 
 // Markdown mínimo: párrafos, listas, tablas y énfasis. Todo el texto se escapa antes de dar formato.
@@ -95,24 +105,41 @@ function agregarHerramientas(llamadas) {
 }
 
 function mostrarConfirmacion(pendiente) {
-  if (!pendiente) { banner.hidden = true; return }
-  $("confirmacion-texto").textContent = `${pendiente.accion} · ${pendiente.referencia}${pendiente.resumen ? ` — ${pendiente.resumen}` : ""}`
+  const advertencia = $("confirmacion-advertencia")
+  if (!pendiente) {
+    banner.hidden = true
+    $("confirmacion-texto").textContent = ""
+    advertencia.textContent = ""
+    advertencia.hidden = true
+    return
+  }
+  $("confirmacion-texto").textContent = pendiente.pregunta ?? `${pendiente.accion} · ${pendiente.referencia}`
+  advertencia.textContent = pendiente.advertencia ? `⚠️ ${pendiente.advertencia}` : ""
+  advertencia.hidden = !pendiente.advertencia
   banner.hidden = false
 }
 
-async function actualizarArchivos() {
-  const r = await fetch("/api/archivos", { headers: cabeceras() }).catch(() => null)
-  if (!r?.ok) return
+async function cargarArchivos() {
+  if (!sessionId) return
+  const r = await fetch(`/api/archivos?sessionId=${encodeURIComponent(sessionId)}`, { headers: cabeceras(), cache: "no-store" }).catch(() => null)
+  if (!revisarIngreso(r) || !r?.ok) return
   const { archivos } = await r.json()
   $("archivos").innerHTML = archivos.length
-    ? archivos.map((a) => `<li><a href="/out/${encodeURI(a)}" target="_blank" rel="noopener">${escapar(a)}</a></li>`).join("")
+    ? archivos.map((a) => `<li><a href="${hrefOut(a)}" target="_blank" rel="noopener">${escapar(a)}</a></li>`).join("")
     : "<li class=\"sub\">Aún no hay archivos.</li>"
+}
+
+/** Refresca el panel ahora y otra vez un momento después, por si el último archivo tardó en quedar visible. */
+function actualizarArchivos() {
+  actualizarEnlacesFijos()
+  cargarArchivos()
+  setTimeout(cargarArchivos, 1500)
 }
 
 async function enviar(mensaje) {
   if (!mensaje.trim()) return
   agregarMensaje("usuario", mensaje)
-  banner.hidden = true
+  mostrarConfirmacion(null)
   botonEnviar.disabled = true
   const pensando = document.createElement("div")
   pensando.className = "pensando"
@@ -121,11 +148,7 @@ async function enviar(mensaje) {
   mensajes.scrollTop = mensajes.scrollHeight
   try {
     const r = await fetch("/api/chat", { method: "POST", headers: cabeceras(), body: JSON.stringify({ sessionId: sessionId ?? undefined, message: mensaje }) })
-    if (r.status === 401) {
-      const clave = prompt("Este agente está protegido. Ingresa la clave de acceso:")
-      if (clave) { almacen.guardar("accessKey", clave); pensando.remove(); botonEnviar.disabled = false; return enviar(mensaje) }
-      throw new Error("Falta la clave de acceso.")
-    }
+    if (!revisarIngreso(r)) return
     const datos = await r.json()
     if (!r.ok) throw new Error(datos.error ?? "Error del servidor.")
     sessionId = datos.sessionId
@@ -146,7 +169,8 @@ async function enviar(mensaje) {
 
 async function restaurarSesion() {
   if (!sessionId) return
-  const r = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { headers: cabeceras() }).catch(() => null)
+  const r = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { headers: cabeceras(), cache: "no-store" }).catch(() => null)
+  if (!revisarIngreso(r)) return
   if (!r?.ok) { sessionId = null; almacen.guardar("sessionId", null); return }
   const { eventos, pendiente } = await r.json()
   let lote = []
@@ -181,6 +205,12 @@ $("nueva").addEventListener("click", () => { almacen.guardar("sessionId", null);
 fetch("/api/health").then((r) => r.json()).then((s) => {
   $("modelo").textContent = s.configurado ? `${s.provider} · ${s.model}` : `${s.provider} · sin configurar`
 }).catch(() => { $("modelo").textContent = "sin conexión" })
+
+fetch("/api/me", { cache: "no-store" }).then((r) => (revisarIngreso(r) && r.ok ? r.json() : null)).then((d) => {
+  if (!d?.usuario) return
+  $("usuario").textContent = d.usuario
+  $("usuario").hidden = false
+}).catch(() => {})
 
 restaurarSesion()
 actualizarArchivos()
