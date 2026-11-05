@@ -2,7 +2,7 @@
 
 Agente conversacional que lee una solicitud de registro como proveedor, llena el formulario desde el repositorio maestro (Excel o PDF), arma el paquete para firma y simula el envío solo con confirmación explícita.
 
-- **Link de prueba:** _pendiente de despliegue en Vercel_
+- **Link de prueba:** https://perxia-reto-01-one.vercel.app (sin clave de acceso)
 - **Planteamiento de la solución:** [SOLUCION.md](SOLUCION.md)
 
 ## Requisitos
@@ -83,4 +83,6 @@ fixtures/                            entregados por Periferia (solo lectura)
 1. Crear un proyecto en Vercel desde el repositorio, con **Root Directory** `reto-01`.
 2. Conectar un **Blob store privado** al proyecto (Storage → Blob); Vercel inyecta `BLOB_READ_WRITE_TOKEN`.
 3. Definir `LLM_PROVIDER`, `LLM_MODEL` (si aplica) y la clave del proveedor en Environment Variables.
-4. Desplegar. La configuración está en `vercel.ts` (runtime Bun, 300 s por función, archivos incluidos).
+4. Desplegar. La configuración está en `vercel.json` (runtime Bun, 300 s por función, archivos incluidos).
+
+La raíz del proyecto se calcula desde `src/agente.ts`, porque en Vercel el directorio de trabajo es `/var/task` y no la carpeta del reto.

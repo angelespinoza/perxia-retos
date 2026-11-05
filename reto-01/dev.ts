@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 // Arranque local: bun run dev (Bun carga .env automáticamente).
 import app from "./src/server.ts"
 

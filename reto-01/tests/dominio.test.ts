@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 import { describe, expect, test } from "bun:test"
 import { generarBorradorCorreo } from "../src/domain/documentos.ts"
 import { leerGlosario, leerIndiceSoportes, leerMaestro, leerSolicitud } from "../src/domain/fixtures.ts"

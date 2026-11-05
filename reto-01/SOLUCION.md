@@ -51,7 +51,7 @@ El agente es **agnóstico de proveedor**: `LLM_PROVIDER` elige entre Anthropic, 
 | Sin caché | 45 000 × $4/M + 3 000 × $20/M | ≈ US$0,24 |
 | Con caché del prefijo | la mayor parte de la entrada se lee de caché a $0,20/M | ≈ US$0,10 |
 
-Es una estimación; el costo real se mide con el campo `uso` que devuelve `/api/chat` en cada turno. Con OpenAI o Gemini el costo depende del modelo que se configure.
+Es una estimación; el costo real se mide con el campo `uso` que devuelve `/api/chat` en cada turno. **Medición real** del despliegue actual (OpenAI `gpt-5.5`): el prompt de la sección 11 consumió unos 20 000 tokens de entrada y 1 400 de salida en el primer turno, y unos 9 000 y 200 en el turno de envío. El costo con OpenAI depende de la tarifa vigente de ese modelo.
 
 ## 5. Diseño del portal web (formato «portal con usuario y contraseña»)
 
@@ -100,7 +100,7 @@ Hoy, para `pa-logistica-istmo`, el agente responde «formato no soportado» y pr
 | HU-3 Generar formulario | Hecho (P0 xlsx, P1 pdf, P2 portal como valores) | `out/<caso>/formulario.xlsx`, `formulario.pdf`, `valores-portal.md` | Escribir sobre la plantilla original del cliente cuando la envíe; automatizar portales (sección 5). |
 | HU-4 Paquete para firma | Hecho | `paquete/` con formulario, soportes, `checklist.md`, `borrador-correo.md`; vencido o ausente bloquea | Integración con firma electrónica y correo (fuera de alcance). |
 | HU-5 Manejo de errores | Hecho | Caso inexistente, plantilla corrupta y formato no soportado en `demo.ts`; herramientas sin excepciones | Alertas operativas sobre errores repetidos. |
-| Despliegue (link) | Pendiente | `vercel.ts` y `Storage` en Blob listos | Crear el proyecto en Vercel y el Blob store. |
+| Despliegue (link) | Hecho | https://perxia-reto-01-one.vercel.app con OpenAI `gpt-5.5` y Vercel Blob privado; prompt de la sección 11 probado en producción | Dominio propio y monitoreo de errores. |
 | Bonus `modulo/` | Hecho | Generado desde las mismas fuentes; `bun run build:modulo --check` en CI | — |
 
 ## 9. Uso de IA

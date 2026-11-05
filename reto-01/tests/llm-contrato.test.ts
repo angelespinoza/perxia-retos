@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 // Los tres adaptadores traducen el mismo historial neutro sin perder llamadas ni resultados.
 import { describe, expect, test } from "bun:test"
 import type { Mensaje } from "../src/llm/adapter.ts"

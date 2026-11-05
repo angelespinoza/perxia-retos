@@ -1,12 +1,14 @@
 // Ensambla el agente: herramientas registradas y system prompt (comportamiento + conocimiento).
 import { readdir, readFile } from "node:fs/promises"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import * as agente from "./core/confirm.ts"
 import { crearRegistro } from "./core/registry.ts"
 import * as proveedor from "./tools/proveedor.ts"
 
-/** Raíz del proyecto: donde viven agent/, fixtures/ y src/knowledge/. */
-export const DIRECTORIO = process.env.APP_DIR || process.cwd()
+/** Raíz del proyecto (donde viven agent/, fixtures/ y src/knowledge/), calculada desde este archivo:
+ * en Vercel el directorio de trabajo no coincide con la carpeta del reto. */
+export const DIRECTORIO = process.env.APP_DIR || dirname(dirname(fileURLToPath(import.meta.url)))
 
 export const registro = crearRegistro({ proveedor, agente })
 

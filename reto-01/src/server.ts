@@ -33,6 +33,12 @@ const ChatSchema = z.object({
 
 export const app = new Hono()
 
+// Ningún error llega crudo al cliente (CA5): se registra en el servidor y se responde en lenguaje claro.
+app.onError((err, c) => {
+  console.error(err)
+  return c.json({ ok: false, error: "Error interno del servidor. La sesión sigue activa: reintenta en unos segundos." }, 500)
+})
+
 // Protección opcional del link público con ACCESS_KEY (cabecera x-access-key o parámetro ?key=).
 app.use("/api/*", async (c, next) => {
   const clave = process.env.ACCESS_KEY

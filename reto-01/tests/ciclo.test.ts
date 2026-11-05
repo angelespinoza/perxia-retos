@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 // Prueba el ciclo del agente con un adaptador simulado que reproduce el flujo de la sección 11 del PRD.
 import { describe, expect, test } from "bun:test"
 import { mkdtemp } from "node:fs/promises"
