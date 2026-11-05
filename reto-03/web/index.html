@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Órdenes de Compra SAP</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="barra">
+    <div>
+      <h1>Órdenes de Compra SAP</h1>
+      <p class="sub">Agente de Periferia IT Group · valida el paquete de compra y crea la OC en SAP (simulado)</p>
+    </div>
+    <div class="acciones">
+      <span id="modelo" class="insignia">…</span>
+      <button id="nueva" class="secundario" type="button">Nueva sesión</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chat" aria-label="Conversación">
+      <div id="mensajes" class="mensajes" aria-live="polite">
+        <div class="bienvenida">
+          <p>Pídeme que procese una solicitud. Por ejemplo:</p>
+          <div class="sugerencias">
+            <button type="button" data-texto="¿Qué solicitudes hay pendientes?">¿Qué solicitudes hay pendientes?</button>
+            <button type="button" data-texto='Procesa la solicitud "sol-004". Muéstrame la OC como quedaría en SAP, qué validaciones pasó y cuáles no, y no la crees hasta que yo lo confirme.'>Procesar sol-004 (ejemplo del PRD)</button>
+            <button type="button" data-texto='Procesa la solicitud "sol-001".'>Procesar sol-001</button>
+            <button type="button" data-texto='Procesa la solicitud "sol-002".'>Procesar sol-002</button>
+            <button type="button" data-texto='Procesa la solicitud "sol-003".'>Procesar sol-003</button>
+            <button type="button" data-texto='Procesa la solicitud "sol-005".'>Procesar sol-005</button>
+            <button type="button" data-texto='Procesa la solicitud "sol-006".'>Procesar sol-006</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="confirmacion" class="confirmacion" hidden>
+        <div>
+          <strong>El agente pide confirmación</strong>
+          <p id="confirmacion-texto"></p>
+        </div>
+        <div class="botones">
+          <button id="confirmar" type="button">Confirmar</button>
+          <button id="cancelar" class="secundario" type="button">Cancelar</button>
+        </div>
+      </div>
+
+      <form id="formulario" class="entrada">
+        <textarea id="texto" rows="2" placeholder="Escribe un mensaje… (Enter para enviar, Shift+Enter para salto de línea)" required></textarea>
+        <button id="enviar" type="submit">Enviar</button>
+      </form>
+    </section>
+
+    <aside class="panel" aria-label="Archivos generados">
+      <h2>Archivos generados</h2>
+      <p class="sub" id="panel-caso">Aparecen al procesar un caso.</p>
+      <ul id="archivos"></ul>
+      <h2>Control y SAP</h2>
+      <ul>
+        <li><a href="/out/control.csv" target="_blank" rel="noopener">control.csv</a></li>
+        <li><a href="/out/sap/ordenes.jsonl" target="_blank" rel="noopener">sap/ordenes.jsonl</a></li>
+        <li><a href="/out/log.jsonl" target="_blank" rel="noopener">log.jsonl</a></li>
+      </ul>
+    </aside>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
