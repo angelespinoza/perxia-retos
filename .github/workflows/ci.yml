@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  reto:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        reto: [reto-01]
+    defaults:
+      run:
+        working-directory: ${{ matrix.reto }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+      - run: bun run demo.ts
+      - run: bun run build:modulo --check
