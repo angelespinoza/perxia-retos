@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Registro de Contratos</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="barra">
+    <div>
+      <h1>Registro de Contratos Vigentes</h1>
+      <p class="sub">Agente de Periferia IT Group · punto único de recepción de contratos</p>
+    </div>
+    <div class="acciones">
+      <span id="modelo" class="insignia">…</span>
+      <button id="nueva" class="secundario" type="button">Nueva sesión</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chat" aria-label="Conversación">
+      <div id="mensajes" class="mensajes" aria-live="polite">
+        <div class="bienvenida">
+          <p>Pídeme que procese el buzón de contratos. Por ejemplo:</p>
+          <div class="sugerencias">
+            <button type="button" data-texto="Procesa el buzón de contratos con fecha de hoy 2026-09-03. Registra lo que esté limpio, muéstrame lo que requiere revisión campo por campo y termina con el reporte de alertas. No registres nada dudoso sin preguntarme.">Procesar el buzón (prompt de la demo)</button>
+            <button type="button" data-texto="¿Qué mensajes hay pendientes en el buzón?">¿Qué hay pendiente?</button>
+            <button type="button" data-texto="confirmo el valor 0 y la fecha fin 2027-08-31">Confirmar msg-006</button>
+            <button type="button" data-texto="Genera el reporte de alertas con fecha de hoy 2026-09-03.">Reporte de alertas</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="confirmacion" class="confirmacion" hidden>
+        <div>
+          <strong>El agente pide confirmación</strong>
+          <p id="confirmacion-texto"></p>
+        </div>
+        <div class="botones">
+          <button id="confirmar" type="button">Confirmar</button>
+          <button id="cancelar" class="secundario" type="button">Cancelar</button>
+        </div>
+      </div>
+
+      <form id="formulario" class="entrada">
+        <textarea id="texto" rows="2" placeholder="Escribe un mensaje… (Enter para enviar, Shift+Enter para salto de línea)" required></textarea>
+        <button id="enviar" type="submit">Enviar</button>
+      </form>
+    </section>
+
+    <aside class="panel" aria-label="Archivos generados">
+      <h2>Archivos generados</h2>
+      <p class="sub" id="panel-caso">Maestro, historial, contratos archivados y alertas en <code>out/</code>.</p>
+      <ul id="archivos"></ul>
+    </aside>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "reto-02-registro-contratos",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch dev.ts",
+    "start": "bun dev.ts",
+    "demo": "bun run demo.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build:modulo": "bun run scripts/build-modulo.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.5.0",
+    "@google/genai": "^2.32.0",
+    "@vercel/blob": "^2.8.2",
+    "hono": "^4.13.16",
+    "openai": "^7.51.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "typescript": "^7.0.2"
+  }
+}
