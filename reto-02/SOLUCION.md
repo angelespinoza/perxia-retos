@@ -119,7 +119,7 @@ La extracción es **100 % determinista** (`src/domain/extraccion.ts`): expresion
 | HU-4 Registrar y archivar | Hecho | Maestro en `out/sharepoint/`, `Contratos/<año>/<cliente>/`, `historial.jsonl`, `procesados.json` | Escritura en SharePoint real con control de versiones. |
 | HU-5 Alertar | Hecho | `out/alertas.md` con las tres secciones + vencidos sin cierre | Envío programado semanal a gerencia. |
 | HU-6 Errores | Hecho | Texto vacío, fecha inválida, moneda desconocida y mensaje inexistente en `demo.ts`; el lote continúa | Cola de reintentos y alertas operativas. |
-| Despliegue (link) | Hecho | URL_PRODUCCION con OpenAI `gpt-5.5` y Vercel Blob privado | Dominio propio y monitoreo de errores. |
+| Despliegue (link) | Hecho | https://perxia-reto-02-seven.vercel.app con OpenAI `gpt-5.5` y Vercel Blob privado; prompt de la sección 11 y la confirmación de msg-006 probados en producción | Dominio propio y monitoreo de errores. |
 | Bonus `modulo/` | Hecho | Generado desde las mismas fuentes; `bun run build:modulo --check` en CI | — |
 
 ## 10. Uso de IA

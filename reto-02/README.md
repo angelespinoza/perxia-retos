@@ -2,7 +2,7 @@
 
 Agente conversacional que actúa como punto único de recepción de contratos: lee el buzón, extrae los datos del contrato con confianza por campo, clasifica cada mensaje (nuevo, actualización, duplicado o rechazado), alimenta el maestro y archiva el documento en una estructura tipo SharePoint, pide revisión humana para lo dudoso y genera el reporte de alertas.
 
-- **Link de prueba:** URL_PRODUCCION (sin clave de acceso)
+- **Link de prueba:** https://perxia-reto-02-seven.vercel.app (sin clave de acceso)
 - **Planteamiento de la solución:** [SOLUCION.md](SOLUCION.md)
 
 ## Requisitos
